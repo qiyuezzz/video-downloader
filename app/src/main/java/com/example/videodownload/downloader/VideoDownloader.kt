@@ -2,10 +2,11 @@ package com.example.videodownload.downloader
 
 import android.content.Context
 import android.net.Uri
-import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
 import com.example.videodownload.data.model.DownloadState
+import com.example.videodownload.util.CookieHelper
+import com.example.videodownload.util.NetworkConstants
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +30,6 @@ class VideoDownloader(private val context: Context) {
             .build()
 
         private val ILLEGAL_CHAR_REGEX = Regex("[/\\\\:*?\"<>|]")
-        private const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
     }
 
     /**
@@ -55,12 +55,12 @@ class VideoDownloader(private val context: Context) {
 
             val request = Request.Builder()
                 .url(videoUrl)
-                .header("User-Agent", USER_AGENT)
+                .header("User-Agent", NetworkConstants.USER_AGENT)
                 .apply {
                     if (referer != null) {
                         header("Referer", referer)
                     }
-                    val cookies = collectCookies(videoUrl)
+                    val cookies = CookieHelper.collectCookies(videoUrl)
                     if (cookies.isNotEmpty()) {
                         header("Cookie", cookies)
                     }
@@ -106,18 +106,6 @@ class VideoDownloader(private val context: Context) {
             emit(DownloadState.Error(e.message ?: "下载失败"))
         }
     }.flowOn(Dispatchers.IO)
-
-    private fun collectCookies(videoUrl: String): String {
-        val cookieManager = CookieManager.getInstance()
-        val domains = listOf(videoUrl, "https://x.com/", "https://twitter.com/", "https://video.twimg.com/")
-        val allCookies = domains
-            .mapNotNull { cookieManager.getCookie(it) }
-            .flatMap { it.split(";") }
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-        return allCookies.joinToString("; ")
-    }
 
     private fun getMimeType(ext: String): String {
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.lowercase())

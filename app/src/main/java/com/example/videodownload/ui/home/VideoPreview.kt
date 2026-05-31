@@ -7,18 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import android.webkit.CookieManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -28,23 +24,9 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.example.videodownload.util.CookieHelper
+import com.example.videodownload.util.NetworkConstants
 import okhttp3.OkHttpClient
-
-/**
- * 从 VideoSniffer 的 WebView CookieManager 收集所有域名的 Cookie。
- * X/Twitter 的 CDN 认证 Cookie 可能存储在 x.com 域名下而非 video.twimg.com。
- */
-private fun collectAllVideoCookies(videoUrl: String): String {
-    val cookieManager = CookieManager.getInstance()
-    val domains = listOf(videoUrl, "https://x.com/", "https://twitter.com/", "https://video.twimg.com/")
-    val allCookies = domains
-        .mapNotNull { cookieManager.getCookie(it) }
-        .flatMap { it.split(";") }
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-        .distinct()
-    return allCookies.joinToString("; ")
-}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -54,12 +36,10 @@ fun VideoPreview(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val userAgent = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
 
     // 当 URL 或网页来源变化时，重新构建播放器以确保 Header 正确
     val exoPlayer = remember(videoUrl, webpageUrl) {
-        // 收集所有相关域名的 Cookie
-        val cookies = collectAllVideoCookies(videoUrl)
+        val cookies = CookieHelper.collectCookies(videoUrl)
 
         val okHttpClient = OkHttpClient.Builder()
             .followRedirects(true)
@@ -67,7 +47,7 @@ fun VideoPreview(
             .build()
 
         val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
-            .setUserAgent(userAgent)
+            .setUserAgent(NetworkConstants.USER_AGENT)
 
         val headers = mutableMapOf<String, String>()
         if (webpageUrl.isNotEmpty()) {

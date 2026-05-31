@@ -40,30 +40,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 用户粘贴链接 → HomeScreen 剪贴板读取
-    → VideoSniffer（隐藏 WebView）拦截页面中的视频流 URL
-    → HomeViewModel 管理解析状态（ParseState sealed class）
+    → HomeViewModel 选择解析器（Twitter 链接优先 TwitterApiParser，否则 YtDlpParser）
+    → parser 解析视频信息 → VideoInfo（标题、缩略图、格式列表）
     → VideoDownloader（OkHttp）通过 SAF DocumentFile 写入用户选定目录
     → DownloadState 反馈下载进度/结果
 ```
 
+**解析器** (`parser/`):
+- `YtDlpParser` — 基于 yt-dlp 的通用解析器，支持大多数视频网站
+- `TwitterApiParser` — 针对 X/Twitter 的轻量级 API 解析器（使用 vxtwitter.com API），用于解决 yt-dlp 无法获取敏感/限制级推文视频的问题
+
 **关键数据模型** (`data/model/VideoInfo.kt`):
 - `VideoInfo` — 视频标题、缩略图、格式列表、来源 URL
-- `VideoFormat` — 单个格式的 ID、质量、扩展名、文件大小、下载地址、高度
-- `DownloadState` — sealed class: `Idle` / `Progress(percent)` / `Success(fileName)` / `Error(message)`
+- `VideoFormat` — 单个格式的 ID、质量、扩展名、文件大小、下载地址、高度、缩略图 URL；`displayLabel` 计算属性返回 "720p (mp4)" 格式
+- `DownloadState` — sealed class: `Idle` / `Progress(percent)` / `Success(fileName, fileUri?)` / `Error(message)`
 
-**导航路由** (`navigation/AppNavigation.kt`):
-- `Routes.HOME` = "home"（起始页）
-- `Routes.SETTINGS` = "settings"
+**导航路由** (`navigation/AppNavigation.kt`，使用 Screen sealed class):
+- `Screen.Home` = "home"（起始页，底部导航）
+- `Screen.Downloads` = "downloads"（下载历史，底部导航）
+- `Screen.Settings` = "settings"（设置页）
+- `Screen.VideoPlayer` = "video_player/{uri}/{title}"（视频播放器）
 
 ### 包结构
 
 | 包 | 职责 |
 |---|---|
-| `data.model` | 数据类和密封类 |
+| `data.model` | 数据类和密封类（VideoInfo、VideoFormat、DownloadState） |
 | `data` | DataStore Preferences 设置持久化 |
+| `parser` | 视频解析器（YtDlpParser、TwitterApiParser） |
 | `downloader` | OkHttp 下载引擎 + SAF 文件写入 |
-| `navigation` | NavHost 路由定义 |
-| `ui.home` | 主页面 Composable + ViewModel + VideoSniffer |
+| `navigation` | NavHost 路由定义 + 底部导航栏 |
+| `ui.home` | 主页面、下载历史、视频播放器 Composable + ViewModel |
 | `ui.settings` | 设置页面 Composable + ViewModel |
 | `ui.theme` | Material3 主题（Color / Theme / Type） |
 
@@ -74,4 +81,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **ViewModel**: 继承 `AndroidViewModel`（需要 Application context 访问 DataStore、OkHttp、剪贴板）。无依赖注入框架，手动实例化
 - **协程**: `viewModelScope.launch` 处理异步；IO 操作通过 `withContext(Dispatchers.IO)`
 - **命名**: Composable 函数 PascalCase；私有辅助 Composable 用描述性名称（如 `PasteSection`、`VideoList`、`QualitySelector`）；常量放 companion object
-- **WebView 模式**: `VideoSniffer` 通过 `AndroidView` 嵌入 WebView（`Modifier.size(1.dp)` 近乎不可见），在 `shouldInterceptRequest` 中拦截视频 URL，页面加载后通过 JS 注入自动播放 `<video>` 元素
+- **视频播放**: 使用 Media3 ExoPlayer，通过 `OkHttpDataSource` 传递认证 Cookie（从 `CookieManager` 收集多个域名的 Cookie）

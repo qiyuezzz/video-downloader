@@ -136,7 +136,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             fileUri = successState.fileUri ?: "",
             timestamp = System.currentTimeMillis()
         )
-        _history.value = listOf(newItem) + _history.value
+        _history.update { current -> listOf(newItem) + current }
         viewModelScope.launch { saveHistory() }
     }
 
@@ -160,23 +160,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        _history.value = _history.value.filter { it.id !in itemIds }
+        _history.update { current -> current.filter { it.id !in itemIds } }
         viewModelScope.launch { saveHistory() }
     }
 
 
     /**
-     * 一键粘贴并解析
+     * 从剪贴板读取纯文本
      */
-    fun pasteAndParse() {
+    private fun readClipboardText(): String? {
         val clipboard =
             getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = clipboard.primaryClip
-        if (clip != null && clip.itemCount > 0) {
-            val text = clip.getItemAt(0).text?.toString()
-            if (text != null && isValidUrl(text)) {
-                parseUrl(text)
-            }
+        return if (clip != null && clip.itemCount > 0) {
+            clip.getItemAt(0).text?.toString()
+        } else null
+    }
+
+    /**
+     * 一键粘贴并解析
+     */
+    fun pasteAndParse() {
+        val text = readClipboardText() ?: return
+        if (extractUrl(text) != null) {
+            parseUrl(text)
         }
     }
 
@@ -184,20 +191,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * 从剪贴板读取链接
      */
     fun readClipboard() {
-        val clipboard =
-            getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = clipboard.primaryClip
-        if (clip != null && clip.itemCount > 0) {
-            val text = clip.getItemAt(0).text?.toString()
-            val extracted = if (text != null) extractUrl(text) else null
-            if (extracted != null) {
-                _clipboardUrl.value = extracted
-            } else {
-                _clipboardUrl.value = null
-            }
-        } else {
-            _clipboardUrl.value = null
-        }
+        val text = readClipboardText()
+        _clipboardUrl.value = text?.let { extractUrl(it) }
     }
 
     /**
@@ -262,7 +257,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     state = DownloadState.Idle
                 )
                 
-                _downloadTasks.value = listOf(newTask) + _downloadTasks.value
+                _downloadTasks.update { current -> listOf(newTask) + current }
 
                 launch {
                     downloader.downloadFlow(
@@ -272,14 +267,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         directoryUri = Uri.parse(saveUri),
                         referer = videoInfo.webpageUrl
                     ).collect { state ->
-                        _downloadTasks.value = _downloadTasks.value.map { task ->
-                            if (task.id == taskId) {
-                                val updatedTask = task.copy(state = state)
-                                if (state is DownloadState.Success) {
-                                    addToHistory(updatedTask, state)
-                                }
-                                updatedTask
-                            } else task
+                        _downloadTasks.update { current ->
+                            current.map { task ->
+                                if (task.id == taskId) {
+                                    val updatedTask = task.copy(state = state)
+                                    if (state is DownloadState.Success) {
+                                        addToHistory(updatedTask, state)
+                                    }
+                                    updatedTask
+                                } else task
+                            }
                         }
                     }
                 }
@@ -306,10 +303,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val pattern = Pattern.compile("""https?://[\w\-_]+(\.[\w\-_]+)+[\w\-\.,@?^=%&:/~+#]*""")
         val matcher = pattern.matcher(text)
         return if (matcher.find()) matcher.group() else null
-    }
-
-    private fun isValidUrl(text: String): Boolean {
-        return extractUrl(text) != null
     }
 
     private fun isXUrl(url: String): Boolean {

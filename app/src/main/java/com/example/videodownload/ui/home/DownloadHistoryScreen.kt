@@ -1,7 +1,5 @@
 package com.example.videodownload.ui.home
 
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,6 +36,10 @@ fun DownloadHistoryScreen(
     
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deletePhysicalFile by remember { mutableStateOf(false) }
+
+    fun toggleSelection(id: String) {
+        if (id in selectedItems) selectedItems.remove(id) else selectedItems.add(id)
+    }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -135,29 +137,12 @@ fun DownloadHistoryScreen(
                         item = item,
                         isEditMode = isEditMode,
                         isSelected = selectedItems.contains(item.id),
-                        onSelect = {
-                            if (selectedItems.contains(item.id)) {
-                                selectedItems.remove(item.id)
-                            } else {
-                                selectedItems.add(item.id)
-                            }
-                        },
+                        onSelect = { toggleSelection(item.id) },
                         onClick = {
                             if (isEditMode) {
-                                if (selectedItems.contains(item.id)) {
-                                    selectedItems.remove(item.id)
-                                } else {
-                                    selectedItems.add(item.id)
-                                }
+                                toggleSelection(item.id)
                             } else {
-                                // 检查文件是否存在
-                                val uri = Uri.parse(item.fileUri)
-                                val docFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
-                                if (docFile != null && docFile.exists()) {
-                                    onPlayVideo(item.fileUri, item.title)
-                                } else {
-                                    Toast.makeText(context, "视频文件不存在或已被删除", Toast.LENGTH_SHORT).show()
-                                }
+                                openVideo(context, item.fileUri)
                             }
                         }
                     )
