@@ -1,11 +1,8 @@
 package com.example.videodownload.ui.home
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,7 +54,6 @@ fun HomeScreen(
     
     val parseState by viewModel.parseState.collectAsState()
     val downloadTasks by viewModel.downloadTasks.collectAsState()
-    val clipboardUrl by viewModel.clipboardUrl.collectAsState()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -121,7 +117,7 @@ fun HomeScreen(
             CenterAlignedTopAppBar(
                 title = { 
                     Text(
-                        "NOVA 下载器", 
+                        "视频下载器",
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp
                     ) 
@@ -601,26 +597,6 @@ fun DownloadBottomSheet(
                 )
             }
             Spacer(modifier = Modifier.height(32.dp))
-        }
-    }
-}
-
-@Composable
-private fun ErrorCard(message: String) {
-    val context = LocalContext.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-    ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = message, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("error", message))
-                Toast.makeText(context, "已复制错误日志", Toast.LENGTH_SHORT).show()
-            }) {
-                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            }
         }
     }
 }

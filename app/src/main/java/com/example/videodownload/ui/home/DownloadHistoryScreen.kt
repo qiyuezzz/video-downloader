@@ -1,7 +1,5 @@
 package com.example.videodownload.ui.home
 
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -171,12 +169,11 @@ fun NovaHistoryCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val transition = updateTransition(isSelected, label = "SelectedState")
-    val cardPadding by transition.animateDp(label = "Padding") { selected -> if (selected) 4.dp else 0.dp }
-    val containerColor by transition.animateColor(label = "Color") { selected -> 
-        if (selected) MaterialTheme.colorScheme.primaryContainer 
-        else MaterialTheme.colorScheme.surfaceVariant
-    }
+    val cardPadding by animateDpAsState(if (isSelected) 4.dp else 0.dp, label = "Padding")
+    val containerColor by animateColorAsState(
+        if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant, label = "Color"
+    )
 
     Card(
         modifier = Modifier
@@ -257,7 +254,6 @@ fun NovaHistoryCard(
     }
 }
 
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
+private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+
+private fun formatDate(timestamp: Long): String = dateFormat.format(Date(timestamp))
