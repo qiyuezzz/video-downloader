@@ -1,5 +1,7 @@
 package com.example.videodownload.ui.home
 
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -142,7 +144,14 @@ fun DownloadHistoryScreen(
                             if (isEditMode) {
                                 toggleSelection(item.id)
                             } else {
-                                openVideo(context, item.fileUri)
+                                // 检查文件是否存在
+                                val uri = Uri.parse(item.fileUri)
+                                val docFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
+                                if (docFile != null && docFile.exists()) {
+                                    onPlayVideo(item.fileUri, item.title)
+                                } else {
+                                    Toast.makeText(context, "视频文件不存在或已被删除", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     )

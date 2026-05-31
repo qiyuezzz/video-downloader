@@ -70,34 +70,64 @@ fun HomeScreen(
     val parseState by viewModel.parseState.collectAsState()
     val downloadTasks by viewModel.downloadTasks.collectAsState()
     val clipboardUrl by viewModel.clipboardUrl.collectAsState()
+val context = LocalContext.current
+val lifecycleOwner = LocalLifecycleOwner.current
+var showBottomSheet by remember { mutableStateOf(false) }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var showBottomSheet by remember { mutableStateOf(false) }
+var duplicateConfirmEvent by remember { mutableStateOf<HomeEvent.ShowDuplicateConfirm?>(null) }
 
-    // 每次进入或回到页面时读取剪贴板
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.readClipboard()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+// 每次进入或回到页面时读取剪贴板
+DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_RESUME) {
+            viewModel.readClipboard()
         }
     }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose {
+        lifecycleOwner.lifecycle.removeObserver(observer)
+    }
+}
 
-    LaunchedEffect(Unit) {
-        viewModel.uiEvent.collect { event ->
-            when (event) {
-                is HomeEvent.ShowDownloadOptions -> {
-                    showBottomSheet = true
+LaunchedEffect(Unit) {
+    viewModel.uiEvent.collect { event ->
+        when (event) {
+            is HomeEvent.ShowDownloadOptions -> {
+                showBottomSheet = true
+            }
+            is HomeEvent.ShowDuplicateConfirm -> {
+                duplicateConfirmEvent = event
+            }
+        }
+    }
+}
+
+if (duplicateConfirmEvent != null) {
+    AlertDialog(
+        onDismissRequest = { duplicateConfirmEvent = null },
+        title = { Text("重复下载提示") },
+        text = { Text("检测到您已经下载过该视频，是否仍要重复下载？") },
+        confirmButton = {
+            Button(onClick = {
+                duplicateConfirmEvent?.let { event ->
+                    viewModel.downloadVideos(event.videoInfo, event.formats, force = true)
                 }
+                duplicateConfirmEvent = null
+                showBottomSheet = false
+            }) {
+                Text("重复下载")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { duplicateConfirmEvent = null }) {
+                Text("取消")
             }
         }
-    }
+    )
+}
 
-    if (showBottomSheet && parseState is ParseState.Success) {
+if (showBottomSheet && parseState is ParseState.Success) {
+
         val successState = parseState as ParseState.Success
         DownloadBottomSheet(
             videoInfo = successState.videoInfo,

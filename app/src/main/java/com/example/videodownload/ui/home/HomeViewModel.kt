@@ -36,6 +36,7 @@ sealed class ParseState {
  */
 sealed class HomeEvent {
     data object ShowDownloadOptions : HomeEvent()
+    data class ShowDuplicateConfirm(val videoInfo: VideoInfo, val formats: List<VideoFormat>) : HomeEvent()
 }
 
 data class DownloadTask(
@@ -192,7 +193,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun readClipboard() {
         val text = readClipboardText()
-        _clipboardUrl.value = text?.let { extractUrl(it) }
+        val extracted = if (text != null) extractUrl(text) else null
+        if (extracted != null) {
+            _clipboardUrl.value = extracted
+        } else {
+            _clipboardUrl.value = null
+        }
     }
 
     /**
@@ -234,13 +240,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 批量下载视频
+     * 批量下载视频 - 增加重复检测
      */
-    fun downloadVideos(videoInfo: VideoInfo, formats: List<VideoFormat>) {
+    fun downloadVideos(videoInfo: VideoInfo, formats: List<VideoFormat>, force: Boolean = false) {
+        if (!force) {
+            // 检测是否已经存在于历史记录中（通过标题/文件名判断）
+            val exists = _history.value.any { it.title == videoInfo.title }
+            if (exists) {
+                viewModelScope.launch {
+                    _uiEvent.emit(HomeEvent.ShowDuplicateConfirm(videoInfo, formats))
+                }
+                return
+            }
+        }
+        executeDownload(videoInfo, formats)
+    }
+
+    private fun executeDownload(videoInfo: VideoInfo, formats: List<VideoFormat>) {
         viewModelScope.launch {
             val saveUri = settingsDataStore.saveLocation.first()
             if (saveUri == null) {
-                // 如果没有设置保存目录，可以在这里提示。为了简单，我们将主状态设为错误
                 _parseState.value = ParseState.Error("请先在设置中选择保存目录")
                 return@launch
             }
