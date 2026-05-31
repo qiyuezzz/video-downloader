@@ -3,10 +3,13 @@ package com.example.videodownload.ui.home
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -41,6 +44,7 @@ import com.example.videodownload.data.model.DownloadState
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.ui.theme.NovaGradientPrimary
+import com.example.videodownload.ui.theme.NovaGradientPrimaryDark
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +52,9 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(),
 ) {
+    val isDark = isSystemInDarkTheme()
+    val primaryGradient = if (isDark) NovaGradientPrimaryDark else NovaGradientPrimary
+    
     val parseState by viewModel.parseState.collectAsState()
     val downloadTasks by viewModel.downloadTasks.collectAsState()
     val clipboardUrl by viewModel.clipboardUrl.collectAsState()
@@ -120,7 +127,9 @@ fun HomeScreen(
                     ) 
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
@@ -133,7 +142,7 @@ fun HomeScreen(
             FloatingActionButton(
                 onClick = { viewModel.pasteAndParse() },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
+                contentColor = if (isDark) MaterialTheme.colorScheme.onPrimary else Color.White,
                 shape = CircleShape,
                 modifier = Modifier.shadow(8.dp, CircleShape)
             ) {
@@ -158,7 +167,8 @@ fun HomeScreen(
                 // Nova 风格的粘贴区域
                 NovaPasteSection(
                     onPaste = { url -> viewModel.parseUrl(url) },
-                    onClear = { viewModel.resetParseState() }
+                    onClear = { viewModel.resetParseState() },
+                    primaryGradient = primaryGradient
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -199,7 +209,7 @@ fun HomeScreen(
                             }
                         }
                         is ParseState.Success -> {
-                            NovaSuccessCard(
+                            NovaResultCard(
                                 videoInfo = state.videoInfo,
                                 onShowOptions = { showBottomSheet = true }
                             )
@@ -229,6 +239,7 @@ fun HomeScreen(
 private fun NovaPasteSection(
     onPaste: (String) -> Unit,
     onClear: () -> Unit,
+    primaryGradient: Brush
 ) {
     var manualUrl by remember { mutableStateOf("") }
 
@@ -236,7 +247,7 @@ private fun NovaPasteSection(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(20.dp)
     ) {
         OutlinedTextField(
@@ -270,7 +281,7 @@ private fun NovaPasteSection(
                 .fillMaxWidth()
                 .height(56.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(if (manualUrl.isNotBlank()) NovaGradientPrimary else Brush.linearGradient(listOf(Color.Gray, Color.Gray))),
+                .background(if (manualUrl.isNotBlank()) primaryGradient else Brush.linearGradient(listOf(Color.Gray, Color.Gray))),
             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
             contentPadding = PaddingValues(0.dp)
         ) {
@@ -280,35 +291,62 @@ private fun NovaPasteSection(
 }
 
 @Composable
-private fun NovaSuccessCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
+private fun NovaResultCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onShowOptions() },
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, 
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        )
     ) {
-        Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "解析成功！",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = videoInfo.title,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = onShowOptions,
-                shape = RoundedCornerShape(14.dp)
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
             ) {
-                Text("配置下载选项")
+                Icon(
+                    Icons.Default.VideoLibrary, 
+                    contentDescription = null, 
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "解析完成",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = videoInfo.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            IconButton(onClick = onShowOptions) {
+                Icon(
+                    Icons.Default.ChevronRight, 
+                    contentDescription = "查看选项",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -364,7 +402,7 @@ private fun NovaActiveDownloadList(activeTasks: List<DownloadTask>) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                    Text("${activeTasks.size}", color = Color.White)
+                    Text("${activeTasks.size}", color = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onPrimary else Color.White)
                 }
             }
             LazyRow(
@@ -463,9 +501,16 @@ fun DownloadBottomSheet(
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "解析结果", 
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold
+                text = "选择要下载的内容", 
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = videoInfo.title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -532,7 +577,7 @@ fun DownloadBottomSheet(
                             Text(text = format.quality, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                             Text(
                                 text = format.ext.uppercase() + (format.filesize?.let { " • ${formatSize(it)}" } ?: ""), 
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -556,6 +601,26 @@ fun DownloadBottomSheet(
                 )
             }
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun ErrorCard(message: String) {
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(text = message, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            IconButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("error", message))
+                Toast.makeText(context, "已复制错误日志", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+            }
         }
     }
 }

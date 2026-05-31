@@ -9,15 +9,18 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = NovaPrimary,
+    primary = NovaPrimaryDark,
     secondary = NovaSecondary,
     tertiary = NovaAccent,
     background = NovaSurfaceDark,
-    surface = NovaSurfaceDark,
-    onSurface = NovaOnSurfaceDark
+    surface = NovaCardDark,
+    onSurface = NovaOnSurfaceDark,
+    surfaceVariant = Color(0xFF27272A), // 使用坚实的深灰色 (Zinc 800)
+    onSurfaceVariant = Color(0xFFD1D5DB) // 浅灰色文字
 )
 
 private val LightColorScheme = lightColorScheme(

@@ -111,7 +111,9 @@ fun DownloadHistoryScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
@@ -172,8 +174,8 @@ fun NovaHistoryCard(
     val transition = updateTransition(isSelected, label = "SelectedState")
     val cardPadding by transition.animateDp(label = "Padding") { selected -> if (selected) 4.dp else 0.dp }
     val containerColor by transition.animateColor(label = "Color") { selected -> 
-        if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f) 
-        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        if (selected) MaterialTheme.colorScheme.primaryContainer 
+        else MaterialTheme.colorScheme.surfaceVariant
     }
 
     Card(
