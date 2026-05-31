@@ -2,16 +2,17 @@ package com.example.videodownload.ui.home
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,9 +21,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,50 +49,31 @@ fun DownloadHistoryScreen(
     }
 
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("确认删除") },
-            text = {
-                Column {
-                    Text("确定要从列表中删除选中的 ${selectedItems.size} 项记录吗？")
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { deletePhysicalFile = !deletePhysicalFile }
-                    ) {
-                        Checkbox(
-                            checked = deletePhysicalFile,
-                            onCheckedChange = { deletePhysicalFile = it }
-                        )
-                        Text("同时删除本地视频文件", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+        NovaDeleteDialog(
+            title = "确认删除",
+            content = "确定要从列表中删除选中的 ${selectedItems.size} 项记录吗？",
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                viewModel.removeHistoryItems(selectedItems.toList(), deletePhysicalFile)
+                selectedItems.clear()
+                isEditMode = false
+                showDeleteDialog = false
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.removeHistoryItems(selectedItems.toList(), deletePhysicalFile)
-                        selectedItems.clear()
-                        isEditMode = false
-                        showDeleteDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("取消")
-                }
-            }
+            showPhysicalDeleteOption = true,
+            isPhysicalDeleteChecked = deletePhysicalFile,
+            onPhysicalDeleteToggle = { deletePhysicalFile = it }
         )
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (isEditMode) "已选择 ${selectedItems.size} 项" else "下载历史") },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Text(
+                        if (isEditMode) "已选择 ${selectedItems.size} 项" else "下载历史",
+                        fontWeight = FontWeight.Bold
+                    ) 
+                },
                 actions = {
                     if (history.isNotEmpty()) {
                         if (isEditMode) {
@@ -101,60 +87,75 @@ fun DownloadHistoryScreen(
                             }) {
                                 Icon(Icons.Default.SelectAll, contentDescription = "全选")
                             }
-                            IconButton(onClick = {
-                                if (selectedItems.isNotEmpty()) {
-                                    showDeleteDialog = true
-                                }
-                            }) {
-                                Icon(Icons.Default.Delete, contentDescription = "删除选中", tint = MaterialTheme.colorScheme.error)
+                            IconButton(
+                                onClick = { if (selectedItems.isNotEmpty()) showDeleteDialog = true },
+                                enabled = selectedItems.isNotEmpty()
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete, 
+                                    contentDescription = "删除选中", 
+                                    tint = if (selectedItems.isNotEmpty()) MaterialTheme.colorScheme.error else Color.Gray
+                                )
                             }
                             TextButton(onClick = { 
                                 isEditMode = false
                                 selectedItems.clear()
                             }) {
-                                Text("取消")
+                                Text("取消", fontWeight = FontWeight.Bold)
                             }
                         } else {
-                            TextButton(onClick = { isEditMode = true }) {
-                                Text("编辑")
+                            IconButton(onClick = { isEditMode = true }) {
+                                Icon(Icons.Default.Edit, contentDescription = "编辑")
                             }
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
         }
     ) { padding ->
-        if (history.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(text = "暂无下载记录", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(history, key = { it.id }) { item ->
-                    HistoryCard(
-                        item = item,
-                        isEditMode = isEditMode,
-                        isSelected = selectedItems.contains(item.id),
-                        onSelect = { toggleSelection(item.id) },
-                        onClick = {
-                            if (isEditMode) {
-                                toggleSelection(item.id)
-                            } else {
-                                // 检查文件是否存在
-                                val uri = Uri.parse(item.fileUri)
-                                val docFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
-                                if (docFile != null && docFile.exists()) {
-                                    onPlayVideo(item.fileUri, item.title)
+        AnimatedContent(
+            targetState = history.isEmpty(),
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "HistoryListTransition"
+        ) { isEmpty ->
+            if (isEmpty) {
+                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.History, 
+                            contentDescription = null, 
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(text = "下载列表空空如也", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(history, key = { it.id }) { item ->
+                        NovaHistoryCard(
+                            item = item,
+                            isEditMode = isEditMode,
+                            isSelected = selectedItems.contains(item.id),
+                            onClick = {
+                                if (isEditMode) {
+                                    toggleSelection(item.id)
                                 } else {
-                                    Toast.makeText(context, "视频文件不存在或已被删除", Toast.LENGTH_SHORT).show()
+                                    checkFileAndRun(context, item.fileUri) {
+                                        onPlayVideo(item.fileUri, item.title)
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -162,37 +163,48 @@ fun DownloadHistoryScreen(
 }
 
 @Composable
-fun HistoryCard(
+fun NovaHistoryCard(
     item: DownloadHistoryItem,
     isEditMode: Boolean,
     isSelected: Boolean,
-    onSelect: () -> Unit,
     onClick: () -> Unit
 ) {
+    val transition = updateTransition(isSelected, label = "SelectedState")
+    val cardPadding by transition.animateDp(label = "Padding") { selected -> if (selected) 4.dp else 0.dp }
+    val containerColor by transition.animateColor(label = "Color") { selected -> 
+        if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f) 
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(cardPadding)
+            .clip(RoundedCornerShape(24.dp))
             .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-        )
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 状态指示器
             if (isEditMode) {
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = { onSelect() }
+                RadioButton(
+                    selected = isSelected,
+                    onClick = null,
+                    colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             
+            // 媒体预览
             Box(
                 modifier = Modifier
-                    .size(width = 100.dp, height = 56.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .size(width = 120.dp, height = 68.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
@@ -204,7 +216,14 @@ fun HistoryCard(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
             }
             
             Spacer(modifier = Modifier.width(16.dp))
@@ -212,10 +231,12 @@ fun HistoryCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = item.fileName,
                     style = MaterialTheme.typography.labelSmall,
@@ -223,7 +244,18 @@ fun HistoryCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = formatDate(item.timestamp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                )
             }
         }
     }
+}
+
+private fun formatDate(timestamp: Long): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return sdf.format(Date(timestamp))
 }

@@ -3,9 +3,8 @@ package com.example.videodownload.ui.home
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,11 +22,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -35,31 +40,7 @@ import coil.compose.AsyncImage
 import com.example.videodownload.data.model.DownloadState
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
-
-fun openVideo(context: Context, uriString: String) {
-    try {
-        val uri = Uri.parse(uriString)
-        val docFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
-        
-        if (docFile == null || !docFile.exists()) {
-            Toast.makeText(context, "视频文件不存在或已被删除", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val mimeType = context.contentResolver.getType(uri) ?: "video/*"
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mimeType)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        
-        val chooser = Intent.createChooser(intent, "选择播放器播放视频")
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
-    } catch (e: Exception) {
-        Toast.makeText(context, "无法打开视频: ${e.message}", Toast.LENGTH_SHORT).show()
-    }
-}
+import com.example.videodownload.ui.theme.NovaGradientPrimary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,64 +51,53 @@ fun HomeScreen(
     val parseState by viewModel.parseState.collectAsState()
     val downloadTasks by viewModel.downloadTasks.collectAsState()
     val clipboardUrl by viewModel.clipboardUrl.collectAsState()
-val context = LocalContext.current
-val lifecycleOwner = LocalLifecycleOwner.current
-var showBottomSheet by remember { mutableStateOf(false) }
 
-var duplicateConfirmEvent by remember { mutableStateOf<HomeEvent.ShowDuplicateConfirm?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var showBottomSheet by remember { mutableStateOf(false) }
+    var duplicateConfirmEvent by remember { mutableStateOf<HomeEvent.ShowDuplicateConfirm?>(null) }
 
-// 每次进入或回到页面时读取剪贴板
-DisposableEffect(lifecycleOwner) {
-    val observer = LifecycleEventObserver { _, event ->
-        if (event == Lifecycle.Event.ON_RESUME) {
-            viewModel.readClipboard()
-        }
-    }
-    lifecycleOwner.lifecycle.addObserver(observer)
-    onDispose {
-        lifecycleOwner.lifecycle.removeObserver(observer)
-    }
-}
-
-LaunchedEffect(Unit) {
-    viewModel.uiEvent.collect { event ->
-        when (event) {
-            is HomeEvent.ShowDownloadOptions -> {
-                showBottomSheet = true
-            }
-            is HomeEvent.ShowDuplicateConfirm -> {
-                duplicateConfirmEvent = event
+    // Lifecycle listener for clipboard
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.readClipboard()
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
-}
 
-if (duplicateConfirmEvent != null) {
-    AlertDialog(
-        onDismissRequest = { duplicateConfirmEvent = null },
-        title = { Text("重复下载提示") },
-        text = { Text("检测到您已经下载过该视频，是否仍要重复下载？") },
-        confirmButton = {
-            Button(onClick = {
+    LaunchedEffect(Unit) {
+        viewModel.uiEvent.collect { event ->
+            when (event) {
+                is HomeEvent.ShowDownloadOptions -> {
+                    showBottomSheet = true
+                }
+                is HomeEvent.ShowDuplicateConfirm -> {
+                    duplicateConfirmEvent = event
+                }
+            }
+        }
+    }
+
+    if (duplicateConfirmEvent != null) {
+        NovaDeleteDialog(
+            title = "重复下载提示",
+            content = "检测到您已经下载过该视频，是否仍要重复下载？",
+            onDismiss = { duplicateConfirmEvent = null },
+            onConfirm = {
                 duplicateConfirmEvent?.let { event ->
                     viewModel.downloadVideos(event.videoInfo, event.formats, force = true)
                 }
                 duplicateConfirmEvent = null
                 showBottomSheet = false
-            }) {
-                Text("重复下载")
             }
-        },
-        dismissButton = {
-            TextButton(onClick = { duplicateConfirmEvent = null }) {
-                Text("取消")
-            }
-        }
-    )
-}
+        )
+    }
 
-if (showBottomSheet && parseState is ParseState.Success) {
-
+    if (showBottomSheet && parseState is ParseState.Success) {
         val successState = parseState as ParseState.Success
         DownloadBottomSheet(
             videoInfo = successState.videoInfo,
@@ -141,11 +111,16 @@ if (showBottomSheet && parseState is ParseState.Success) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("视频下载器") },
+            CenterAlignedTopAppBar(
+                title = { 
+                    Text(
+                        "NOVA 下载器", 
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
+                    ) 
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = Color.Transparent,
                 ),
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
@@ -158,7 +133,9 @@ if (showBottomSheet && parseState is ParseState.Success) {
             FloatingActionButton(
                 onClick = { viewModel.pasteAndParse() },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.shadow(8.dp, CircleShape)
             ) {
                 Icon(Icons.Default.ContentPaste, contentDescription = "粘贴并解析")
             }
@@ -169,81 +146,234 @@ if (showBottomSheet && parseState is ParseState.Success) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // 主体内容区域
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(16.dp)
+                    .padding(horizontal = 20.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // 粘贴链接区域
-                PasteSection(
-                    clipboardUrl = clipboardUrl,
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Nova 风格的粘贴区域
+                NovaPasteSection(
                     onPaste = { url -> viewModel.parseUrl(url) },
-                    onClear = { viewModel.resetParseState() },
+                    onClear = { viewModel.resetParseState() }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // 解析状态展示
-                when (val state = parseState) {
-                    is ParseState.Idle -> { 
-                         Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                            Text(text = "请粘贴视频链接开始解析", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    is ParseState.Loading -> {
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
-                    }
-                    is ParseState.Success -> {
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "解析成功！", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = state.videoInfo.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // 动态状态切换动画
+                AnimatedContent(
+                    targetState = parseState,
+                    transitionSpec = {
+                        (fadeIn() + scaleIn(initialScale = 0.9f)).togetherWith(fadeOut())
+                    },
+                    label = "ParseStateTransition"
+                ) { state ->
+                    when (state) {
+                        is ParseState.Idle -> {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 60.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Link, 
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                )
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Button(onClick = { showBottomSheet = true }) {
-                                    Text("打开选集列表")
-                                }
+                                Text(
+                                    "粘贴视频链接开始探索", 
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                    }
-                    is ParseState.Error -> {
-                        ErrorCard(message = state.message)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(onClick = { viewModel.resetParseState() }, modifier = Modifier.fillMaxWidth()) {
-                            Text("重试")
+                        is ParseState.Loading -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(strokeWidth = 3.dp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("正在极速解析中...", fontWeight = FontWeight.Medium)
+                            }
+                        }
+                        is ParseState.Success -> {
+                            NovaSuccessCard(
+                                videoInfo = state.videoInfo,
+                                onShowOptions = { showBottomSheet = true }
+                            )
+                        }
+                        is ParseState.Error -> {
+                            NovaErrorCard(
+                                message = state.message,
+                                onRetry = { viewModel.resetParseState() }
+                            )
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(32.dp))
             }
 
-            // 正在下载的任务
+            // 底部正在下载区域
             val activeTasks = downloadTasks.filter { it.state !is DownloadState.Success && it.state !is DownloadState.Error }
             if (activeTasks.isNotEmpty()) {
-                Surface(
-                    tonalElevation = 8.dp,
-                    shadowElevation = 16.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 12.dp)) {
-                        Text(
-                            text = "正在下载 (${activeTasks.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                        )
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(activeTasks, key = { it.id }) { task ->
-                                DownloadTaskItem(task = task, onRemove = {})
-                            }
-                        }
+                NovaActiveDownloadList(activeTasks)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovaPasteSection(
+    onPaste: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    var manualUrl by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(20.dp)
+    ) {
+        OutlinedTextField(
+            value = manualUrl,
+            onValueChange = { manualUrl = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("输入或粘贴视频链接", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = Color.Transparent,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                focusedContainerColor = MaterialTheme.colorScheme.surface
+            ),
+            trailingIcon = {
+                if (manualUrl.isNotEmpty()) {
+                    IconButton(onClick = { manualUrl = ""; onClear() }) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp))
                     }
+                }
+            }
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Button(
+            onClick = { if (manualUrl.isNotBlank()) onPaste(manualUrl) },
+            enabled = manualUrl.isNotBlank(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (manualUrl.isNotBlank()) NovaGradientPrimary else Brush.linearGradient(listOf(Color.Gray, Color.Gray))),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text("立即解析", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+    }
+}
+
+@Composable
+private fun NovaSuccessCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "解析成功！",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = videoInfo.title,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = onShowOptions,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("配置下载选项")
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f))
+    ) {
+        Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "解析遇到了点小麻烦",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = message,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            OutlinedButton(onClick = onRetry, shape = RoundedCornerShape(14.dp)) {
+                Text("再次尝试")
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovaActiveDownloadList(activeTasks: List<DownloadTask>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+    ) {
+        Column(modifier = Modifier.padding(vertical = 20.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "正在处理",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                    Text("${activeTasks.size}", color = Color.White)
+                }
+            }
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                items(activeTasks, key = { it.id }) { task ->
+                    DownloadTaskItem(task)
                 }
             }
         }
@@ -251,10 +381,12 @@ if (showBottomSheet && parseState is ParseState.Success) {
 }
 
 @Composable
-fun DownloadTaskItem(task: DownloadTask, onRemove: () -> Unit) {
+fun DownloadTaskItem(task: DownloadTask) {
     Card(
-        modifier = Modifier.width(180.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        modifier = Modifier.width(200.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
             Box(
@@ -265,19 +397,43 @@ fun DownloadTaskItem(task: DownloadTask, onRemove: () -> Unit) {
                 contentAlignment = Alignment.Center
             ) {
                 if (task.thumbnailUrl != null) {
-                    AsyncImage(model = task.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    AsyncImage(
+                        model = task.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                // 进度覆盖层
+                if (task.state is DownloadState.Progress) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { (task.state as DownloadState.Progress).percent / 100f },
+                            color = Color.White,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                 }
             }
-            Column(modifier = Modifier.padding(8.dp)) {
-                Text(text = task.title, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Spacer(modifier = Modifier.height(4.dp))
                 when (val state = task.state) {
-                    is DownloadState.Idle -> Text("等待中...", style = MaterialTheme.typography.labelSmall)
-                    is DownloadState.Progress -> {
-                        LinearProgressIndicator(progress = { state.percent / 100f }, modifier = Modifier.fillMaxWidth())
-                        Text("${state.percent}%", style = MaterialTheme.typography.labelSmall)
-                    }
-                    else -> {} 
+                    is DownloadState.Idle -> Text("正在排队...", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    is DownloadState.Progress -> Text("已完成 ${state.percent}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    else -> {}
                 }
             }
         }
@@ -297,52 +453,71 @@ fun DownloadBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        dragHandle = { BottomSheetDefaults.DragHandle(width = 40.dp) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
-            Text(text = "解析结果", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "解析结果", 
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Spacer(modifier = Modifier.height(20.dp))
 
             if (previewUrl != null) {
-                VideoPreview(
-                    videoUrl = previewUrl!!,
-                    webpageUrl = videoInfo.webpageUrl,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-                TextButton(onClick = { previewUrl = null }) {
-                    Text("关闭预览")
+                Box(modifier = Modifier.clip(RoundedCornerShape(20.dp))) {
+                    VideoPreview(
+                        videoUrl = previewUrl!!,
+                        webpageUrl = videoInfo.webpageUrl,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
+                TextButton(
+                    onClick = { previewUrl = null },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("关闭预览", color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            Text("请勾选要下载的内容：", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+            Text("选择下载画质：", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(12.dp))
 
             LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                 items(videoInfo.formats) { format ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                            .padding(vertical = 6.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (selectedFormats.contains(format)) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
                             .clickable {
                                 selectedFormats = if (selectedFormats.contains(format)) {
                                     selectedFormats - format
                                 } else {
                                     selectedFormats + format
                                 }
-                            },
+                            }
+                            .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(checked = selectedFormats.contains(format), onCheckedChange = null)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Checkbox(
+                            checked = selectedFormats.contains(format), 
+                            onCheckedChange = null,
+                            colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
                         Box(
                             modifier = Modifier
-                                .width(100.dp)
+                                .width(80.dp)
                                 .aspectRatio(16f/9f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(Color.Black)
                                 .clickable { previewUrl = format.url },
                             contentAlignment = Alignment.Center
@@ -350,94 +525,37 @@ fun DownloadBottomSheet(
                             if (format.thumbnailUrl != null) {
                                 AsyncImage(model = format.thumbnailUrl, contentDescription = null, contentScale = ContentScale.Crop)
                             }
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
                         Column {
-                            Text(text = format.quality, style = MaterialTheme.typography.bodyLarge)
-                            Text(text = format.ext.uppercase() + (format.filesize?.let { " - ${formatSize(it)}" } ?: ""), 
-                                 style = MaterialTheme.typography.bodySmall)
+                            Text(text = format.quality, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = format.ext.uppercase() + (format.filesize?.let { " • ${formatSize(it)}" } ?: ""), 
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { onDownload(selectedFormats.toList()) },
                 enabled = selectedFormats.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Text(if (selectedFormats.isNotEmpty()) "立即下载 (${selectedFormats.size})" else "请选择视频")
+                Text(
+                    if (selectedFormats.isNotEmpty()) "立即下载 (${selectedFormats.size} 个视频)" else "请至少选择一个视频",
+                    fontWeight = FontWeight.Bold
+                )
             }
             Spacer(modifier = Modifier.height(32.dp))
-        }
-    }
-}
-
-@Composable
-private fun PasteSection(
-    clipboardUrl: String?,
-    onPaste: (String) -> Unit,
-    onClear: () -> Unit,
-) {
-    var manualUrl by remember { mutableStateOf("") }
-
-    LaunchedEffect(clipboardUrl) {
-        if (clipboardUrl == null) manualUrl = ""
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "粘贴视频链接", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = manualUrl,
-                onValueChange = { manualUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("https://...") },
-                singleLine = true,
-                trailingIcon = {
-                    if (manualUrl.isNotEmpty()) {
-                        IconButton(onClick = { manualUrl = ""; onClear() }) {
-                            Icon(Icons.Default.Clear, contentDescription = null)
-                        }
-                    }
-                }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = { if (manualUrl.isNotBlank()) onPaste(manualUrl) },
-                enabled = manualUrl.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("解析")
-            }
-        }
-    }
-}
-
-@Composable
-private fun ErrorCard(message: String) {
-    val context = LocalContext.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-    ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = message, color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("error", message))
-                Toast.makeText(context, "已复制错误日志", Toast.LENGTH_SHORT).show()
-            }) {
-                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
-            }
         }
     }
 }

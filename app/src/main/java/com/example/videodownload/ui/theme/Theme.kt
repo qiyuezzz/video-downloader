@@ -12,32 +12,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = NovaPrimary,
+    secondary = NovaSecondary,
+    tertiary = NovaAccent,
+    background = NovaSurfaceDark,
+    surface = NovaSurfaceDark,
+    onSurface = NovaOnSurfaceDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = NovaPrimary,
+    secondary = NovaSecondary,
+    tertiary = NovaAccent,
+    background = NovaSurface,
+    surface = NovaSurface,
+    onSurface = NovaOnSurface
 )
 
 @Composable
 fun VideoDownloadTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // 关闭动态颜色以保持 Nova 品牌视觉一致性
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -53,6 +49,7 @@ fun VideoDownloadTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = NovaShapes,
         content = content
     )
 }
