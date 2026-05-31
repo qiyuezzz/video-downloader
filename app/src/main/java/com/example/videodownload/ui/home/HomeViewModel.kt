@@ -43,7 +43,8 @@ data class DownloadTask(
     val id: String,
     val title: String,
     val thumbnailUrl: String?,
-    val state: DownloadState
+    val state: DownloadState,
+    val videoUrl: String // 新增：用于任务中标识
 )
 
 data class DownloadHistoryItem(
@@ -52,6 +53,7 @@ data class DownloadHistoryItem(
     val thumbnailUrl: String?,
     val fileName: String,
     val fileUri: String,
+    val videoUrl: String, // 新增：保存视频原链接用于精准查重
     val timestamp: Long
 )
 
@@ -103,6 +105,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailUrl = obj.optString("thumbnailUrl", null),
                     fileName = obj.getString("fileName"),
                     fileUri = obj.getString("fileUri"),
+                    videoUrl = obj.optString("videoUrl", ""),
                     timestamp = obj.getLong("timestamp")
                 ))
             }
@@ -121,6 +124,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 put("thumbnailUrl", item.thumbnailUrl ?: JSONObject.NULL)
                 put("fileName", item.fileName)
                 put("fileUri", item.fileUri)
+                put("videoUrl", item.videoUrl)
                 put("timestamp", item.timestamp)
             }
             array.put(obj)
@@ -135,6 +139,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             thumbnailUrl = task.thumbnailUrl,
             fileName = successState.fileName,
             fileUri = successState.fileUri ?: "",
+            videoUrl = task.videoUrl,
             timestamp = System.currentTimeMillis()
         )
         _history.update { current -> listOf(newItem) + current }
@@ -240,13 +245,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 批量下载视频 - 增加重复检测
+     * 批量下载视频 - 增加精准重复检测
      */
     fun downloadVideos(videoInfo: VideoInfo, formats: List<VideoFormat>, force: Boolean = false) {
         if (!force) {
-            // 检测是否已经存在于历史记录中（通过标题/文件名判断）
-            val exists = _history.value.any { it.title == videoInfo.title }
-            if (exists) {
+            // 精准检测：只有当选中的视频链接已经存在于历史中时才提示
+            val selectedUrls = formats.map { it.url }
+            val alreadyDownloaded = _history.value.any { it.videoUrl in selectedUrls }
+            
+            if (alreadyDownloaded) {
                 viewModelScope.launch {
                     _uiEvent.emit(HomeEvent.ShowDuplicateConfirm(videoInfo, formats))
                 }
@@ -273,7 +280,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     id = taskId,
                     title = fileName,
                     thumbnailUrl = format.thumbnailUrl ?: videoInfo.thumbnailUrl,
-                    state = DownloadState.Idle
+                    state = DownloadState.Idle,
+                    videoUrl = format.url
                 )
                 
                 _downloadTasks.update { current -> listOf(newTask) + current }
