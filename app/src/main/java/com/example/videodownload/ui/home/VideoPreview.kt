@@ -24,7 +24,6 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
-import com.example.videodownload.util.CookieHelper
 import com.example.videodownload.util.NetworkConstants
 import okhttp3.OkHttpClient
 
@@ -39,27 +38,29 @@ fun VideoPreview(
 
     // 当 URL 或网页来源变化时，重新构建播放器以确保 Header 正确
     val exoPlayer = remember(videoUrl, webpageUrl) {
-        val cookies = CookieHelper.collectCookies(videoUrl)
-
         val okHttpClient = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
 
+        val isBilibili = videoUrl.contains("bilivideo.com") || webpageUrl.contains("bilibili.com")
+
+        val userAgent = if (isBilibili) NetworkConstants.USER_AGENT_DESKTOP else NetworkConstants.USER_AGENT
+
         val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
-            .setUserAgent(NetworkConstants.USER_AGENT)
+            .setUserAgent(userAgent)
 
         val headers = mutableMapOf<String, String>()
+        headers["Accept"] = "*/*"
+        headers["Connection"] = "keep-alive"
+
         if (webpageUrl.isNotEmpty()) {
-            val referer = if (webpageUrl.contains("x.com") || webpageUrl.contains("twitter.com")) {
-                "https://x.com/"
-            } else {
-                webpageUrl
+            val referer = when {
+                isBilibili -> NetworkConstants.BILIBILI_BASE_URL
+                webpageUrl.contains("x.com") || webpageUrl.contains("twitter.com") -> "https://x.com/"
+                else -> webpageUrl
             }
             headers["Referer"] = referer
-        }
-        if (cookies.isNotEmpty()) {
-            headers["Cookie"] = cookies
         }
         dataSourceFactory.setDefaultRequestProperties(headers)
 

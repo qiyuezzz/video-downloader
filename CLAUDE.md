@@ -42,18 +42,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 用户粘贴链接 → HomeScreen 剪贴板读取
     → HomeViewModel 选择解析器（Twitter 链接优先 TwitterApiParser，否则 YtDlpParser）
     → parser 解析视频信息 → VideoInfo（标题、缩略图、格式列表）
+    → 重复下载检测（基于视频 URL 精准查重）
     → VideoDownloader（OkHttp）通过 SAF DocumentFile 写入用户选定目录
     → DownloadState 反馈下载进度/结果
 ```
 
+**应用初始化** (`MainApplication.kt`):
+- 启动时初始化 yt-dlp 和 FFmpeg（`YoutubeDL.init()` / `FFmpeg.init()`）
+- 后台静默更新 yt-dlp 到最新稳定版（`YoutubeDL.UpdateChannel.STABLE`），应对 X/Twitter 等网站的频繁 API 变动
+
 **解析器** (`parser/`):
 - `YtDlpParser` — 基于 yt-dlp 的通用解析器，支持大多数视频网站
-- `TwitterApiParser` — 针对 X/Twitter 的轻量级 API 解析器（使用 vxtwitter.com API），用于解决 yt-dlp 无法获取敏感/限制级推文视频的问题
+- `TwitterApiParser` — 针对 X/Twitter 的轻量级 API 解析器（使用 `api.vxtwitter.com` API），用于解决 yt-dlp 无法获取敏感/限制级推文视频的问题；支持单推文多视频
 
 **关键数据模型** (`data/model/VideoInfo.kt`):
 - `VideoInfo` — 视频标题、缩略图、格式列表、来源 URL
 - `VideoFormat` — 单个格式的 ID、质量、扩展名、文件大小、下载地址、高度、缩略图 URL；`displayLabel` 计算属性返回 "720p (mp4)" 格式
 - `DownloadState` — sealed class: `Idle` / `Progress(percent)` / `Success(fileName, fileUri?)` / `Error(message)`
+
+**ViewModel 状态模型** (`ui/home/HomeViewModel.kt`):
+- `ParseState` — sealed class: `Idle` / `Loading` / `Success(videoInfo)` / `Error(message)`，控制解析 UI 状态
+- `HomeEvent` — sealed class: `ShowDownloadOptions` / `ShowDuplicateConfirm(videoInfo, formats)`，一次性 UI 事件通过 `SharedFlow` 发送
 
 **导航路由** (`navigation/AppNavigation.kt`，使用 Screen sealed class):
 - `Screen.Home` = "home"（起始页，底部导航）
@@ -66,7 +75,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 包 | 职责 |
 |---|---|
 | `data.model` | 数据类和密封类（VideoInfo、VideoFormat、DownloadState） |
-| `data` | DataStore Preferences 设置持久化 |
+| `data` | DataStore Preferences 设置持久化（含下载历史 JSON） |
 | `parser` | 视频解析器（YtDlpParser、TwitterApiParser） |
 | `downloader` | OkHttp 下载引擎 + SAF 文件写入 |
 | `navigation` | NavHost 路由定义 + 底部导航栏 |
@@ -81,4 +90,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **ViewModel**: 继承 `AndroidViewModel`（需要 Application context 访问 DataStore、OkHttp、剪贴板）。无依赖注入框架，手动实例化
 - **协程**: `viewModelScope.launch` 处理异步；IO 操作通过 `withContext(Dispatchers.IO)`
 - **命名**: Composable 函数 PascalCase；私有辅助 Composable 用描述性名称（如 `PasteSection`、`VideoList`、`QualitySelector`）；常量放 companion object
-- **视频播放**: 使用 Media3 ExoPlayer，通过 `OkHttpDataSource` 传递认证 Cookie（从 `CookieManager` 收集多个域名的 Cookie）
+- **视频播放**: 使用 Media3 ExoPlayer，通过 `OkHttpDataSource` 传递必要的 Header（如 Referer 和 User-Agent）以适配不同平台。
+- **图片加载**: 使用 Coil (`coil-compose`) 加载视频缩略图

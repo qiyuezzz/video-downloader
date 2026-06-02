@@ -13,9 +13,11 @@ import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.downloader.VideoDownloader
 import com.example.videodownload.parser.TwitterApiParser
 import com.example.videodownload.parser.YtDlpParser
+import com.example.videodownload.util.NetworkConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -44,7 +46,8 @@ data class DownloadTask(
     val title: String,
     val thumbnailUrl: String?,
     val state: DownloadState,
-    val videoUrl: String // 新增：用于任务中标识
+    val videoUrl: String, // 视频文件URL
+    val webpageUrl: String // 原始帖子链接，用于跨平台重复检测
 )
 
 data class DownloadHistoryItem(
@@ -53,7 +56,8 @@ data class DownloadHistoryItem(
     val thumbnailUrl: String?,
     val fileName: String,
     val fileUri: String,
-    val videoUrl: String, // 新增：保存视频原链接用于精准查重
+    val videoUrl: String, // 视频文件URL
+    val webpageUrl: String, // 原始帖子链接
     val timestamp: Long
 )
 
@@ -102,10 +106,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 list.add(DownloadHistoryItem(
                     id = obj.getString("id"),
                     title = obj.getString("title"),
-                    thumbnailUrl = obj.optString("thumbnailUrl", null),
+                    thumbnailUrl = obj.optString("thumbnailUrl", "").ifEmpty { null },
                     fileName = obj.getString("fileName"),
                     fileUri = obj.getString("fileUri"),
                     videoUrl = obj.optString("videoUrl", ""),
+                    webpageUrl = obj.optString("webpageUrl", ""),
                     timestamp = obj.getLong("timestamp")
                 ))
             }
@@ -125,6 +130,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 put("fileName", item.fileName)
                 put("fileUri", item.fileUri)
                 put("videoUrl", item.videoUrl)
+                put("webpageUrl", item.webpageUrl)
                 put("timestamp", item.timestamp)
             }
             array.put(obj)
@@ -140,6 +146,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             fileName = successState.fileName,
             fileUri = successState.fileUri ?: "",
             videoUrl = task.videoUrl,
+            webpageUrl = task.webpageUrl,
             timestamp = System.currentTimeMillis()
         )
         _history.update { current -> listOf(newItem) + current }
@@ -210,16 +217,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * 解析链接 - 优先使用专用 API (应对推特限制级/多视频)，然后回退到 yt-dlp
      */
     fun parseUrl(rawInput: String) {
-        val url = extractUrl(rawInput)
-        if (url == null) {
+        val rawUrl = extractUrl(rawInput)
+        if (rawUrl == null) {
             _parseState.value = ParseState.Error("未能从输入中识别到有效的链接")
             return
         }
 
         _parseState.value = ParseState.Loading
-        
+
         viewModelScope.launch {
             try {
+                val url = cleanUrl(rawUrl)
                 // 1. 如果是 Twitter/X 链接，优先尝试专门的 API
                 if (isXUrl(url)) {
                     val twitterInfo = twitterApiParser.parse(url)
@@ -249,10 +257,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun downloadVideos(videoInfo: VideoInfo, formats: List<VideoFormat>, force: Boolean = false) {
         if (!force) {
-            // 精准检测：只有当选中的视频链接已经存在于历史中时才提示
-            val selectedUrls = formats.map { it.url }
-            val alreadyDownloaded = _history.value.any { it.videoUrl in selectedUrls }
-            
+            // 精准检测：检查视频文件URL或原始帖子链接是否已存在
+            val selectedUrls = formats.map { it.url }.toSet()
+            val webpageUrl = videoInfo.webpageUrl
+            val alreadyDownloaded = _history.value.any { historyItem ->
+                historyItem.videoUrl in selectedUrls || // 视频文件URL匹配
+                (webpageUrl.isNotEmpty() && historyItem.webpageUrl == webpageUrl) // 原始帖子链接匹配
+            }
+
             if (alreadyDownloaded) {
                 viewModelScope.launch {
                     _uiEvent.emit(HomeEvent.ShowDuplicateConfirm(videoInfo, formats))
@@ -281,7 +293,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     title = fileName,
                     thumbnailUrl = format.thumbnailUrl ?: videoInfo.thumbnailUrl,
                     state = DownloadState.Idle,
-                    videoUrl = format.url
+                    videoUrl = format.url,
+                    webpageUrl = videoInfo.webpageUrl
                 )
                 
                 _downloadTasks.update { current -> listOf(newTask) + current }
@@ -334,5 +347,64 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun isXUrl(url: String): Boolean {
         return url.contains("x.com") || url.contains("twitter.com")
+    }
+
+    companion object {
+        /** B站视频/Bangumi ID 提取正则 */
+        private val BILI_ID_REGEX = Regex(
+            """bilibili\.com/(?:video/|bangumi/play/)(BV[\w]+|av\d+|ep\d+|ss\d+)""",
+            RegexOption.IGNORE_CASE
+        )
+    }
+
+    /**
+     * 链接清洗：去除追踪参数、统一格式，提高 yt-dlp 识别率
+     */
+    private suspend fun cleanUrl(url: String): String {
+        var result = url.trim()
+
+        // B站 b23.tv 短链接先解析
+        if (result.contains("b23.tv")) {
+            val resolved = resolveB23Url(result)
+            if (resolved != null) return resolved
+        }
+
+        // B站: 提取 BV/av/ep/ss 号，构造干净的 www 链接
+        val biliMatch = BILI_ID_REGEX.find(result)
+        if (biliMatch != null) {
+            val id = biliMatch.groupValues[1]
+            return "${NetworkConstants.BILIBILI_BASE_URL}/video/$id"
+        }
+
+        // B站兜底: 去除查询参数，统一子域名
+        if (result.contains("bilibili.com")) {
+            return result.substringBefore("?").replace("m.bilibili.com", "www.bilibili.com")
+        }
+
+        // Instagram/X: 去除 ? 后的追踪参数
+        if (result.contains("instagram.com") || isXUrl(result)) {
+            return result.substringBefore("?")
+        }
+
+        return result
+    }
+
+    /** 解析 b23.tv 短链接，返回干净的长链接 */
+    private suspend fun resolveB23Url(shortUrl: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val client = okhttp3.OkHttpClient.Builder()
+                .followRedirects(false)
+                .build()
+            val request = okhttp3.Request.Builder()
+                .url(shortUrl)
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            val response = client.newCall(request).execute()
+            val location = response.header("Location") ?: return@withContext null
+            val match = BILI_ID_REGEX.find(location) ?: return@withContext null
+            "${NetworkConstants.BILIBILI_BASE_URL}/video/${match.groupValues[1]}"
+        } catch (e: Exception) {
+            null
+        }
     }
 }

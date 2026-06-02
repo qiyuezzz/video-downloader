@@ -26,7 +26,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -350,6 +352,10 @@ private fun NovaResultCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
 
 @Composable
 private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -372,8 +378,25 @@ private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(20.dp))
-            OutlinedButton(onClick = onRetry, shape = RoundedCornerShape(14.dp)) {
-                Text("再次尝试")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onRetry, shape = RoundedCornerShape(14.dp)) {
+                    Text("再次尝试")
+                }
+                OutlinedButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(message))
+                        copied = true
+                    },
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(
+                        imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (copied) "已复制" else "复制错误")
+                }
             }
         }
     }
@@ -440,18 +463,27 @@ fun DownloadTaskItem(task: DownloadTask) {
                 }
                 // 进度覆盖层
                 if (task.state is DownloadState.Progress) {
+                    val progress = task.state.percent
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = 0.4f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            progress = { (task.state as DownloadState.Progress).percent / 100f },
-                            color = Color.White,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(36.dp)
-                        )
+                        if (progress >= 0) {
+                            CircularProgressIndicator(
+                                progress = { progress / 100f },
+                                color = Color.White,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        } else {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -466,7 +498,13 @@ fun DownloadTaskItem(task: DownloadTask) {
                 Spacer(modifier = Modifier.height(4.dp))
                 when (val state = task.state) {
                     is DownloadState.Idle -> Text("正在排队...", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                    is DownloadState.Progress -> Text("已完成 ${state.percent}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    is DownloadState.Progress -> {
+                        if (state.percent >= 0) {
+                            Text("已完成 ${state.percent}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Text("正在下载...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                     else -> {}
                 }
             }

@@ -5,7 +5,6 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
 import com.example.videodownload.data.model.DownloadState
-import com.example.videodownload.util.CookieHelper
 import com.example.videodownload.util.NetworkConstants
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -53,32 +52,40 @@ class VideoDownloader(private val context: Context) {
             val file = dir.createFile(mimeType, "$safeName.$ext")
                 ?: throw IOException("无法创建文件")
 
+            val isBilibili = videoUrl.contains("bilivideo.com") || referer?.contains("bilibili.com") == true
+            val userAgent = if (isBilibili) NetworkConstants.USER_AGENT_DESKTOP else NetworkConstants.USER_AGENT
+
             val request = Request.Builder()
                 .url(videoUrl)
-                .header("User-Agent", NetworkConstants.USER_AGENT)
+                .header("User-Agent", userAgent)
                 .apply {
                     if (referer != null) {
-                        header("Referer", referer)
-                    }
-                    val cookies = CookieHelper.collectCookies(videoUrl)
-                    if (cookies.isNotEmpty()) {
-                        header("Cookie", cookies)
+                        val safeReferer = if (isBilibili) NetworkConstants.BILIBILI_BASE_URL else referer
+                        header("Referer", safeReferer)
                     }
                 }
                 .build()
+            
             val response = sharedClient.newCall(request).execute()
 
             if (!response.isSuccessful) {
+                file.delete()
                 throw IOException("下载失败: HTTP ${response.code}")
             }
 
             val body = response.body ?: throw IOException("响应体为空")
             val totalBytes = body.contentLength()
+            
+            // 如果 Content-Length 为 0，通常意味着链接失效或被拦截
+            if (totalBytes == 0L) {
+                file.delete()
+                throw IOException("下载失败: 视频内容为空 (0 bytes)")
+            }
 
+            var downloadedBytes = 0L
             context.contentResolver.openOutputStream(file.uri)?.use { outputStream ->
                 body.byteStream().use { inputStream ->
                     val buffer = ByteArray(8192)
-                    var downloadedBytes = 0L
                     var bytesRead: Int
                     var lastReportedPercent = -1
 
@@ -93,11 +100,20 @@ class VideoDownloader(private val context: Context) {
                                 lastReportedPercent = percent
                                 emit(DownloadState.Progress(percent))
                             }
+                        } else if (downloadedBytes == 0L) {
+                            // 未知总大片，仅在开始时发送一次状态更新
+                            emit(DownloadState.Progress(-1))
                         }
                     }
                     outputStream.flush()
                 }
             } ?: throw IOException("无法打开输出流")
+
+            // 最终校验：如果下载字节数为 0，删除文件
+            if (downloadedBytes == 0L) {
+                file.delete()
+                throw IOException("下载失败: 写入数据为 0")
+            }
 
             emit(DownloadState.Success("$safeName.$ext", file.uri.toString()))
         } catch (e: CancellationException) {
