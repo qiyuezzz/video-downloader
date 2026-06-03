@@ -5,7 +5,7 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +25,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 import android.view.LayoutInflater
+import android.view.View
+import androidx.activity.compose.BackHandler
 import com.example.videodownload.R
 
 @OptIn(UnstableApi::class)
@@ -37,9 +39,9 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val uri = remember { Uri.parse(uriString) }
-    
-    // 增加一个退出状态，点击返回时立即隐藏内容
-    var isExiting by remember { mutableStateOf(false) }
+
+    // 持有 PlayerView 的弱引用，退出时直接操作 View 层避免控制条残留
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     // 初始化播放器
     val exoPlayer = remember {
@@ -67,28 +69,31 @@ fun VideoPlayerScreen(
         }
     }
 
+    // 拦截系统返回键，与自定义按钮一样先隐藏 PlayerView 再返回
+    BackHandler {
+        playerViewRef?.visibility = View.GONE
+        onNavigateBack()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 如果正在退出，直接不渲染播放器视图，避免残留
-        if (!isExiting) {
-            AndroidView(
-                factory = { ctx ->
-                    // 通过 XML 引入以开启 TextureView
-                    val view = LayoutInflater.from(ctx).inflate(R.layout.texture_video_view, null) as PlayerView
-                    view.apply {
-                        player = exoPlayer
-                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-                onRelease = {
-                    it.player = null
-                }
-            )
-        }
+        AndroidView(
+            factory = { ctx ->
+                val view = LayoutInflater.from(ctx).inflate(R.layout.texture_video_view, null) as PlayerView
+                view.apply {
+                    player = exoPlayer
+                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }.also { playerViewRef = it }
+            },
+            modifier = Modifier.fillMaxSize(),
+            onRelease = {
+                it.player = null
+                playerViewRef = null
+            }
+        )
 
         // 顶层覆盖层：标题和返回按钮
         Row(
@@ -100,12 +105,13 @@ fun VideoPlayerScreen(
         ) {
             IconButton(
                 onClick = {
-                    isExiting = true // 立即隐藏
+                    // 先立即隐藏 PlayerView（含控制条），再导航返回
+                    playerViewRef?.visibility = View.GONE
                     onNavigateBack()
                 },
                 colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f))
             ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Text(

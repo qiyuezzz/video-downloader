@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * Nova 风格的统一样式对话框
+ * Nova 风格统一对话框
  */
 @Composable
 fun NovaDeleteDialog(
@@ -30,30 +31,51 @@ fun NovaDeleteDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(28.dp),
-        title = { Text(title, fontWeight = FontWeight.Bold) },
+        shape = RoundedCornerShape(24.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                title,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
         text = {
             Column {
-                Text(content)
+                Text(
+                    content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (showPhysicalDeleteOption) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { onPhysicalDeleteToggle(!isPhysicalDeleteChecked) }
-                            .padding(vertical = 4.dp)
+                            .clickable { onPhysicalDeleteToggle(!isPhysicalDeleteChecked) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
                     ) {
-                        Checkbox(
-                            checked = isPhysicalDeleteChecked,
-                            onCheckedChange = { onPhysicalDeleteToggle(it) }
-                        )
-                        Text(
-                            "同时删除本地视频文件", 
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            Checkbox(
+                                checked = isPhysicalDeleteChecked,
+                                onCheckedChange = { onPhysicalDeleteToggle(it) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.error
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "同时删除本地视频文件",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
@@ -62,16 +84,29 @@ fun NovaDeleteDialog(
             Button(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (showPhysicalDeleteOption) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    containerColor = if (showPhysicalDeleteOption)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.primary,
+                    contentColor = if (showPhysicalDeleteOption)
+                        MaterialTheme.colorScheme.onError
+                    else
+                        MaterialTheme.colorScheme.onPrimary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(if (showPhysicalDeleteOption) "删除" else "确定", fontWeight = FontWeight.Bold)
+                Text(
+                    if (showPhysicalDeleteOption) "删除" else "确定",
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("取消")
+                Text(
+                    "取消",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     )
@@ -84,7 +119,7 @@ fun checkFileAndRun(context: Context, uriString: String, action: () -> Unit) {
     try {
         val uri = Uri.parse(uriString)
         val docFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
-        
+
         if (docFile != null && docFile.exists()) {
             action()
         } else {
@@ -107,7 +142,7 @@ fun openVideo(context: Context, uriString: String) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        
+
         val chooser = Intent.createChooser(intent, "选择播放器播放视频")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)

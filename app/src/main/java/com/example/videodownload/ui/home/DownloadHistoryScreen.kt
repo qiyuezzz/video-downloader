@@ -2,7 +2,9 @@ package com.example.videodownload.ui.home
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,10 +38,10 @@ fun DownloadHistoryScreen(
 ) {
     val history by viewModel.history.collectAsState()
     val context = LocalContext.current
-    
+
     var isEditMode by remember { mutableStateOf(false) }
     val selectedItems = remember { mutableStateListOf<String>() }
-    
+
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deletePhysicalFile by remember { mutableStateOf(false) }
 
@@ -64,18 +67,20 @@ fun DownloadHistoryScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Text(
                         if (isEditMode) "已选择 ${selectedItems.size} 项" else "下载历史",
-                        fontWeight = FontWeight.Bold
-                    ) 
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
                 },
                 actions = {
                     if (history.isNotEmpty()) {
                         if (isEditMode) {
-                            IconButton(onClick = {
+                            FilledTonalIconButton(onClick = {
                                 if (selectedItems.size == history.size) {
                                     selectedItems.clear()
                                 } else {
@@ -83,63 +88,96 @@ fun DownloadHistoryScreen(
                                     selectedItems.addAll(history.map { it.id })
                                 }
                             }) {
-                                Icon(Icons.Default.SelectAll, contentDescription = "全选")
+                                Icon(Icons.Filled.SelectAll, contentDescription = "全选")
                             }
-                            IconButton(
+                            FilledTonalIconButton(
                                 onClick = { if (selectedItems.isNotEmpty()) showDeleteDialog = true },
                                 enabled = selectedItems.isNotEmpty()
                             ) {
                                 Icon(
-                                    Icons.Default.Delete, 
-                                    contentDescription = "删除选中", 
-                                    tint = if (selectedItems.isNotEmpty()) MaterialTheme.colorScheme.error else Color.Gray
+                                    Icons.Filled.Delete,
+                                    contentDescription = "删除选中",
+                                    tint = if (selectedItems.isNotEmpty())
+                                        MaterialTheme.colorScheme.error
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                 )
                             }
-                            TextButton(onClick = { 
+                            TextButton(onClick = {
                                 isEditMode = false
                                 selectedItems.clear()
                             }) {
-                                Text("取消", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "取消",
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         } else {
-                            IconButton(onClick = { isEditMode = true }) {
-                                Icon(Icons.Default.Edit, contentDescription = "编辑")
+                            FilledTonalIconButton(onClick = { isEditMode = true }) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "编辑",
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                    containerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
     ) { padding ->
-        AnimatedContent(
-            targetState = history.isEmpty(),
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "HistoryListTransition"
-        ) { isEmpty ->
-            if (isEmpty) {
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.History, 
-                            contentDescription = null, 
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(text = "下载列表空空如也", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
+        ) {
+            if (history.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Outlined.History,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(36.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Text(
+                                text = "下载列表空空如也",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "去首页粘贴链接开始下载吧",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                     items(history, key = { it.id }) { item ->
                         NovaHistoryCard(
                             item = item,
@@ -170,40 +208,49 @@ fun NovaHistoryCard(
     onClick: () -> Unit
 ) {
     val cardPadding by animateDpAsState(if (isSelected) 4.dp else 0.dp, label = "Padding")
+    val borderColor by animateColorAsState(
+        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+        else Color.Transparent,
+        label = "BorderColor"
+    )
     val containerColor by animateColorAsState(
-        if (isSelected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant, label = "Color"
+        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        else MaterialTheme.colorScheme.surfaceVariant,
+        label = "Color"
     )
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(cardPadding)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 0.dp)
+        shape = RoundedCornerShape(20.dp),
+        color = containerColor,
+        shadowElevation = if (isSelected) 4.dp else 0.dp,
+        border = if (isEditMode) BorderStroke(1.dp, borderColor) else null
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 状态指示器
             if (isEditMode) {
-                RadioButton(
-                    selected = isSelected,
-                    onClick = null,
-                    colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary,
+                        checkmarkColor = MaterialTheme.colorScheme.onPrimary
+                    )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            
+
             // 媒体预览
             Box(
                 modifier = Modifier
                     .size(width = 120.dp, height = 68.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
@@ -217,16 +264,21 @@ fun NovaHistoryCard(
                 }
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(30.dp)
                         .background(Color.Black.copy(alpha = 0.4f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
+
+            Spacer(modifier = Modifier.width(14.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.title,
@@ -235,10 +287,10 @@ fun NovaHistoryCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = item.fileName,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -246,8 +298,8 @@ fun NovaHistoryCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = formatDate(item.timestamp),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
         }
