@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.videodownload.data.SettingsDataStore
@@ -47,7 +48,13 @@ data class DownloadTask(
     val thumbnailUrl: String?,
     val state: DownloadState,
     val videoUrl: String, // 视频文件URL
-    val webpageUrl: String // 原始帖子链接，用于跨平台重复检测
+    val webpageUrl: String, // 原始帖子链接，用于跨平台重复检测
+    // 持久化所需字段（断点续传）
+    val fileName: String = "",
+    val ext: String = "mp4",
+    val directoryUri: String = "",
+    val fileUri: String = "",
+    val totalBytes: Long = 0,
 )
 
 data class DownloadHistoryItem(
@@ -95,7 +102,105 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+
+        // 恢复中断的下载任务
+        viewModelScope.launch {
+            restoreActiveDownloads()
+        }
     }
+
+    // ==================== 活跃任务持久化 ====================
+
+    /**
+     * 恢复上次退出时未完成的下载任务
+     */
+    private suspend fun restoreActiveDownloads() {
+        val json = settingsDataStore.activeDownloads.first() ?: return
+        val tasks = parseActiveDownloadsJson(json)
+        if (tasks.isEmpty()) return
+
+        val restored = mutableListOf<DownloadTask>()
+        for (task in tasks) {
+            // 检查文件是否仍然存在
+            if (task.fileUri.isNotEmpty()) {
+                try {
+                    val fileUri = Uri.parse(task.fileUri)
+                    val file = DocumentFile.fromSingleUri(getApplication(), fileUri)
+                    if (file != null && file.exists() && file.length() > 0) {
+                        restored.add(task.copy(state = DownloadState.Interrupted))
+                    }
+                } catch (_: Exception) {
+                    // 文件不可访问，跳过
+                }
+            }
+        }
+
+        if (restored.isNotEmpty()) {
+            _downloadTasks.value = restored
+        }
+
+        // 清理已不存在的任务
+        if (restored.size != tasks.size) {
+            saveActiveDownloads()
+        }
+    }
+
+    /**
+     * 将活跃下载任务序列化为 JSON 并持久化
+     */
+    private suspend fun saveActiveDownloads() {
+        val tasks = _downloadTasks.value.filter { task ->
+            // 只持久化未完成的任务
+            task.state !is DownloadState.Success
+        }
+        val array = JSONArray()
+        tasks.forEach { task ->
+            val obj = JSONObject().apply {
+                put("id", task.id)
+                put("title", task.title)
+                put("thumbnailUrl", task.thumbnailUrl ?: JSONObject.NULL)
+                put("videoUrl", task.videoUrl)
+                put("webpageUrl", task.webpageUrl)
+                put("fileName", task.fileName)
+                put("ext", task.ext)
+                put("directoryUri", task.directoryUri)
+                put("fileUri", task.fileUri)
+                put("totalBytes", task.totalBytes)
+            }
+            array.put(obj)
+        }
+        settingsDataStore.saveActiveDownloads(array.toString())
+    }
+
+    private fun parseActiveDownloadsJson(json: String): List<DownloadTask> {
+        val list = mutableListOf<DownloadTask>()
+        try {
+            val array = JSONArray(json)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    DownloadTask(
+                        id = obj.getString("id"),
+                        title = obj.getString("title"),
+                        thumbnailUrl = obj.optString("thumbnailUrl", "").ifEmpty { null },
+                        state = DownloadState.Idle, // 临时状态，恢复时会被覆盖
+                        videoUrl = obj.getString("videoUrl"),
+                        webpageUrl = obj.optString("webpageUrl", ""),
+                        fileName = obj.optString("fileName", ""),
+                        ext = obj.optString("ext", "mp4"),
+                        directoryUri = obj.optString("directoryUri", ""),
+                        fileUri = obj.optString("fileUri", ""),
+                        totalBytes = obj.optLong("totalBytes", 0),
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    // ==================== 历史记录 ====================
 
     private fun parseHistoryJson(json: String): List<DownloadHistoryItem> {
         val list = mutableListOf<DownloadHistoryItem>()
@@ -159,7 +264,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeHistoryItems(itemIds: List<String>, deleteFile: Boolean = false) {
         val itemsToRemove = _history.value.filter { it.id in itemIds }
-        
+
         if (deleteFile) {
             viewModelScope.launch(Dispatchers.IO) {
                 itemsToRemove.forEach { item ->
@@ -287,17 +392,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val suffix = if (formats.size > 1) "_${index + 1}" else ""
                 val fileName = "${videoInfo.title}$suffix"
                 val taskId = UUID.randomUUID().toString()
-                
+
                 val newTask = DownloadTask(
                     id = taskId,
                     title = fileName,
                     thumbnailUrl = format.thumbnailUrl ?: videoInfo.thumbnailUrl,
                     state = DownloadState.Idle,
                     videoUrl = format.url,
-                    webpageUrl = videoInfo.webpageUrl
+                    webpageUrl = videoInfo.webpageUrl,
+                    fileName = fileName,
+                    ext = format.ext,
+                    directoryUri = saveUri,
                 )
-                
+
                 _downloadTasks.update { current -> listOf(newTask) + current }
+                // 持久化新任务
+                saveActiveDownloads()
 
                 launch {
                     downloader.downloadFlow(
@@ -310,7 +420,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         _downloadTasks.update { current ->
                             current.map { task ->
                                 if (task.id == taskId) {
-                                    val updatedTask = task.copy(state = state)
+                                    val updatedTask = task.copy(
+                                        state = state,
+                                        // 从 Progress/Success 中捕获文件 URI
+                                        fileUri = when (state) {
+                                            is DownloadState.Progress -> state.fileUri ?: task.fileUri
+                                            is DownloadState.Success -> state.fileUri ?: task.fileUri
+                                            else -> task.fileUri
+                                        }
+                                    )
                                     if (state is DownloadState.Success) {
                                         addToHistory(updatedTask, state)
                                     }
@@ -318,10 +436,101 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                                 } else task
                             }
                         }
+                        // 每次状态变更时持久化（包含文件 URI 等信息）
+                        saveActiveDownloads()
                     }
                 }
             }
         }
+    }
+
+    /**
+     * 恢复所有中断/失败的下载
+     */
+    fun resumeAllDownloads() {
+        val tasksToResume = _downloadTasks.value.filter {
+            it.state is DownloadState.Interrupted || it.state is DownloadState.Error
+        }
+        tasksToResume.forEach { resumeDownload(it.id) }
+    }
+
+    /**
+     * 恢复中断的下载
+     */
+    fun resumeDownload(taskId: String) {
+        val task = _downloadTasks.value.find { it.id == taskId } ?: return
+        if (task.state !is DownloadState.Interrupted && task.state !is DownloadState.Error) return
+
+        viewModelScope.launch {
+            val directoryUri = task.directoryUri.ifEmpty {
+                settingsDataStore.saveLocation.first() ?: return@launch
+            }
+
+            // 获取已下载的文件大小
+            val existingFileUri = if (task.fileUri.isNotEmpty()) Uri.parse(task.fileUri) else null
+            var downloadedBytes = 0L
+            if (existingFileUri != null) {
+                try {
+                    val file = DocumentFile.fromSingleUri(getApplication(), existingFileUri)
+                    if (file != null && file.exists()) {
+                        downloadedBytes = file.length()
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // 更新状态为下载中
+            _downloadTasks.update { current ->
+                current.map { if (it.id == taskId) it.copy(state = DownloadState.Progress(((downloadedBytes * 100) / (if (task.totalBytes > 0) task.totalBytes else 1)).toInt().coerceAtMost(99))) else it }
+            }
+
+            launch {
+                downloader.downloadFlow(
+                    videoUrl = task.videoUrl,
+                    fileName = task.fileName,
+                    ext = task.ext,
+                    directoryUri = Uri.parse(directoryUri),
+                    referer = task.webpageUrl,
+                    existingFileUri = existingFileUri,
+                    alreadyDownloadedBytes = downloadedBytes,
+                ).collect { state ->
+                    _downloadTasks.update { current ->
+                        current.map { t ->
+                            if (t.id == taskId) {
+                                val updated = t.copy(
+                                    state = state,
+                                    fileUri = if (state is DownloadState.Success) (state.fileUri ?: t.fileUri) else t.fileUri,
+                                    directoryUri = directoryUri,
+                                )
+                                if (state is DownloadState.Success) {
+                                    addToHistory(updated, state)
+                                }
+                                updated
+                            } else t
+                        }
+                    }
+                    saveActiveDownloads()
+                }
+            }
+        }
+    }
+
+    /**
+     * 删除未完成的下载任务及可选清理文件
+     */
+    fun removeIncompleteTask(taskId: String, deleteFile: Boolean = false) {
+        val task = _downloadTasks.value.find { it.id == taskId } ?: return
+
+        if (deleteFile && task.fileUri.isNotEmpty()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val uri = Uri.parse(task.fileUri)
+                    DocumentFile.fromSingleUri(getApplication(), uri)?.delete()
+                } catch (_: Exception) {}
+            }
+        }
+
+        _downloadTasks.update { current -> current.filter { it.id != taskId } }
+        viewModelScope.launch { saveActiveDownloads() }
     }
 
     /**
@@ -333,7 +542,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeDownloadTask(taskId: String) {
-        _downloadTasks.value = _downloadTasks.value.filter { it.id != taskId }
+        _downloadTasks.update { current -> current.filter { it.id != taskId } }
+        viewModelScope.launch { saveActiveDownloads() }
     }
 
     /**

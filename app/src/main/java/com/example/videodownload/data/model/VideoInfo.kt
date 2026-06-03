@@ -5,9 +5,10 @@ package com.example.videodownload.data.model
  */
 sealed class DownloadState {
     data object Idle : DownloadState()
-    data class Progress(val percent: Int) : DownloadState()
+    data class Progress(val percent: Int, val fileUri: String? = null) : DownloadState()
     data class Success(val fileName: String, val fileUri: String? = null) : DownloadState()
     data class Error(val message: String) : DownloadState()
+    data object Interrupted : DownloadState()
 }
 
 /**

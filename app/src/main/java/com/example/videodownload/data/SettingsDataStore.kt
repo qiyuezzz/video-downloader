@@ -20,6 +20,7 @@ class SettingsDataStore(private val context: Context) {
         private val SAVE_LOCATION_KEY = stringPreferencesKey("save_location")
         private val PREFERRED_QUALITY_KEY = stringPreferencesKey("preferred_quality")
         private val DOWNLOAD_HISTORY_KEY = stringPreferencesKey("download_history")
+        private val ACTIVE_DOWNLOADS_KEY = stringPreferencesKey("active_downloads")
 
         const val QUALITY_BEST = "best"
         const val QUALITY_720P = "720p"
@@ -41,10 +42,22 @@ class SettingsDataStore(private val context: Context) {
         prefs[DOWNLOAD_HISTORY_KEY]
     }
 
+    /** 活跃下载任务 JSON 字符串 */
+    val activeDownloads: Flow<String?> = context.dataStore.data.map { prefs ->
+        prefs[ACTIVE_DOWNLOADS_KEY]
+    }
+
     /** 更新历史记录 */
     suspend fun saveDownloadHistory(json: String) {
         context.dataStore.edit { prefs ->
             prefs[DOWNLOAD_HISTORY_KEY] = json
+        }
+    }
+
+    /** 更新活跃下载任务 */
+    suspend fun saveActiveDownloads(json: String) {
+        context.dataStore.edit { prefs ->
+            prefs[ACTIVE_DOWNLOADS_KEY] = json
         }
     }
 
