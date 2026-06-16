@@ -12,6 +12,7 @@ import com.example.videodownload.data.model.DownloadState
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.downloader.VideoDownloader
+import com.example.videodownload.parser.BilibiliNativeParser
 import com.example.videodownload.parser.TwitterApiParser
 import com.example.videodownload.parser.YtDlpParser
 import com.example.videodownload.util.NetworkConstants
@@ -77,6 +78,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsDataStore = SettingsDataStore(application)
     private val ytParser = YtDlpParser()
     private val twitterApiParser = TwitterApiParser()
+    private val bilibiliNativeParser = BilibiliNativeParser()
 
     private val _parseState = MutableStateFlow<ParseState>(ParseState.Idle)
     val parseState: StateFlow<ParseState> = _parseState
@@ -343,7 +345,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // 2. 使用 yt-dlp 解析 (通用或作为回退)
+                // 2. 如果是 B站链接，优先尝试原生极速 API
+                if (url.contains("bilibili.com")) {
+                    val biliInfo = bilibiliNativeParser.parse(url)
+                    if (biliInfo != null && biliInfo.formats.isNotEmpty()) {
+                        _parseState.value = ParseState.Success(biliInfo)
+                        _uiEvent.emit(HomeEvent.ShowDownloadOptions)
+                        return@launch
+                    }
+                }
+
+                // 3. 使用 yt-dlp 解析 (通用或作为回退)
                 val videoInfo = ytParser.parse(url)
                 if (videoInfo != null && videoInfo.formats.isNotEmpty()) {
                     _parseState.value = ParseState.Success(videoInfo)
@@ -352,7 +364,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     _parseState.value = ParseState.Error("解析失败，未找到可用的视频格式")
                 }
             } catch (e: Exception) {
-                _parseState.value = ParseState.Error("解析出错: ${e.message ?: "未知错误"}")
+                val message = e.message ?: ""
+                val friendlyMessage = when {
+                    message.contains("412") -> "B站解析受限 (412)，请尝试重试或切换网络"
+                    message.contains("403") -> "访问被拒绝 (403)，请检查链接或稍后再试"
+                    message.contains("Incomplete YouTube ID") -> "链接格式不正确"
+                    else -> "解析出错: ${e.message ?: "未知错误"}"
+                }
+                _parseState.value = ParseState.Error(friendlyMessage)
             }
         }
     }
@@ -576,19 +595,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // B站 b23.tv 短链接先解析
         if (result.contains("b23.tv")) {
             val resolved = resolveB23Url(result)
-            if (resolved != null) return resolved
+            if (resolved != null) {
+                result = resolved
+            }
         }
 
         // B站: 提取 BV/av/ep/ss 号，构造干净的 www 链接
         val biliMatch = BILI_ID_REGEX.find(result)
         if (biliMatch != null) {
             val id = biliMatch.groupValues[1]
-            return "${NetworkConstants.BILIBILI_BASE_URL}/video/$id"
+            return "https://www.bilibili.com/video/$id"
         }
 
-        // B站兜底: 去除查询参数，统一子域名
+        // B站兜底: 统一子域名为 www
         if (result.contains("bilibili.com")) {
-            return result.substringBefore("?").replace("m.bilibili.com", "www.bilibili.com")
+            // 确保是 https 并强制使用 www 域名，这是 yt-dlp 识别最稳健的格式
+            result = result.replace("http://", "https://")
+                .replace("m.bilibili.com", "www.bilibili.com")
+            
+            if (result.contains("?")) {
+                result = result.substringBefore("?")
+            }
+            return result
         }
 
         // Instagram/X: 去除 ? 后的追踪参数
@@ -607,12 +635,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 .build()
             val request = okhttp3.Request.Builder()
                 .url(shortUrl)
-                .header("User-Agent", "Mozilla/5.0")
+                .header("User-Agent", NetworkConstants.USER_AGENT)
                 .build()
             val response = client.newCall(request).execute()
-            val location = response.header("Location") ?: return@withContext null
-            val match = BILI_ID_REGEX.find(location) ?: return@withContext null
-            "${NetworkConstants.BILIBILI_BASE_URL}/video/${match.groupValues[1]}"
+            response.header("Location")
         } catch (e: Exception) {
             null
         }

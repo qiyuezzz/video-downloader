@@ -1,45 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 阴影层：提供悬浮感 -->
-    <path
-        android:fillColor="#4D000000"
-        android:pathData="M54,85L30,66h12V27h24v39h12L54,85z" />
-
-    <!-- 玻璃拟态底层：半透明白色 -->
-    <path
-        android:pathData="M54,83L30,64h12V25h24v39h12L54,83z"
-        android:fillAlpha="0.2"
-        android:fillColor="#FFFFFF" />
-
-    <!-- 核心符号：加宽、加粗、完美居中 (V + 箭头) -->
-    <path android:pathData="M54,83L30,64h12V25h24v39h12L54,83z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="30"
-                android:startY="25"
-                android:endX="78"
-                android:endY="83"
-                android:type="linear">
-                <item android:color="#FF00D2FF" android:offset="0.0" />
-                <item android:color="#FF7C3AED" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- 高光层：顶部和转折边缘 -->
-    <path
-        android:pathData="M42,25h24v1h-24z M30,64h12v1h-12z M66,64h12v1h-12z"
-        android:fillColor="#4DFFFFFF" />
-
-    <!-- 中心播放符号：完美居中于杆部 -->
+    <!-- 纤细、轻量化的扁平化下载图标 -->
+    <!-- 优化了宽高比和线条感，使其看起来更现代、不笨重 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M51,40l8,4.5l-8,4.5z" />
+        android:pathData="M54,82 C53,82 52.5,81.8 52,81.3 L35,64.3 C34.3,63.6 34.8,62.5 35.8,62.5 L46,62.5 L46,28 C46,26.5 47,25.5 48.5,25.5 L59.5,25.5 C61,25.5 62,26.5 62,28 L62,62.5 L72.2,62.5 C73.2,62.5 73.7,63.6 73,64.3 L56,81.3 C55.5,81.8 55,82 54,82 Z" />
 
 </vector>

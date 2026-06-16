@@ -19,6 +19,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        androidResources {
+            localeFilters += listOf("zh", "en")
+        }
         ndk {
             abiFilters.add("arm64-v8a")
         }
@@ -28,11 +31,12 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
+            // 开启更加激进的优化
+            setProguardFiles(listOf(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
-            )
-            signingConfig = signingConfigs.getByName("debug") // 暂时使用调试签名以便生成可安装的 Release 包
+            ))
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -41,11 +45,6 @@ android {
     }
     buildFeatures {
         compose = true
-    }
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
     }
 }
 
@@ -56,7 +55,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
