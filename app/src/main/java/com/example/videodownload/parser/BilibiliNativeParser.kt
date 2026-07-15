@@ -2,6 +2,7 @@ package com.example.videodownload.parser
 
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
+import com.example.videodownload.util.NetworkClients
 import com.example.videodownload.util.NetworkConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,12 +15,14 @@ import java.util.regex.Pattern
  * B站原生 API 解析器 (极速版)
  * 绕过 yt-dlp 的 Python 初始化，直接通过 B站接口获取 480P/720P 视频
  */
-class BilibiliNativeParser {
-    private val client = OkHttpClient.Builder()
-        .followRedirects(true)
-        .build()
+class BilibiliNativeParser(
+    private val client: OkHttpClient = NetworkClients.standard,
+) : VideoParser {
 
-    suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
+    override fun supports(url: String): Boolean =
+        url.contains("bilibili.com", ignoreCase = true)
+
+    override suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
         try {
             val bvid = extractBvid(url) ?: return@withContext null
             
@@ -30,8 +33,10 @@ class BilibiliNativeParser {
                 .header("User-Agent", NetworkConstants.USER_AGENT_DESKTOP)
                 .build()
             
-            val viewResponse = client.newCall(viewRequest).execute()
-            val viewJson = JSONObject(viewResponse.body?.string() ?: "")
+            val viewJson = client.newCall(viewRequest).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                JSONObject(response.body?.string().orEmpty())
+            }
             if (viewJson.getInt("code") != 0) return@withContext null
             
             val data = viewJson.getJSONObject("data")
@@ -48,8 +53,10 @@ class BilibiliNativeParser {
                 .header("Referer", "https://www.bilibili.com/video/$bvid")
                 .build()
             
-            val playResponse = client.newCall(playRequest).execute()
-            val playJson = JSONObject(playResponse.body?.string() ?: "")
+            val playJson = client.newCall(playRequest).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                JSONObject(response.body?.string().orEmpty())
+            }
             if (playJson.getInt("code") != 0) return@withContext null
             
             val playData = playJson.getJSONObject("data")

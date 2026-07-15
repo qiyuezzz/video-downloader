@@ -1,5 +1,7 @@
 package com.example.videodownload.ui.home
 
+import com.example.videodownload.data.model.DownloadHistoryItem
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -306,6 +308,5 @@ fun NovaHistoryCard(
     }
 }
 
-private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-
-private fun formatDate(timestamp: Long): String = dateFormat.format(Date(timestamp))
+private fun formatDate(timestamp: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))

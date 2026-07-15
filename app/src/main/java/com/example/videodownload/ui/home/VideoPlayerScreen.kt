@@ -1,6 +1,6 @@
 package com.example.videodownload.ui.home
 
-import android.net.Uri
+import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,6 +23,7 @@ import androidx.media3.ui.PlayerView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.net.toUri
 
 import android.view.LayoutInflater
 import android.view.View
@@ -38,7 +39,7 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val uri = remember { Uri.parse(uriString) }
+    val uri = remember(uriString) { uriString.toUri() }
 
     // 持有 PlayerView 的弱引用，退出时直接操作 View 层避免控制条残留
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
@@ -82,7 +83,9 @@ fun VideoPlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                val view = LayoutInflater.from(ctx).inflate(R.layout.texture_video_view, null) as PlayerView
+                val parent = FrameLayout(ctx)
+                val view = LayoutInflater.from(ctx)
+                    .inflate(R.layout.texture_video_view, parent, false) as PlayerView
                 view.apply {
                     player = exoPlayer
                     resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT

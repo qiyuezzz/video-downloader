@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.net.toUri
 import com.example.videodownload.data.SettingsDataStore
 
 private val QUALITY_OPTIONS = listOf(
@@ -120,7 +121,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = saveLocation?.let { uri ->
-                                Uri.parse(uri).lastPathSegment ?: uri
+                                uri.toUri().lastPathSegment ?: uri
                             } ?: "点击选择保存目录",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium

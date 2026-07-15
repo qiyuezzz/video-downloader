@@ -11,12 +11,14 @@ import kotlinx.coroutines.withContext
 /**
  * 基于 yt-dlp 的视频解析器
  */
-class YtDlpParser {
+class YtDlpParser : VideoParser {
+
+    override fun supports(url: String): Boolean = true
 
     /**
      * 解析视频链接
      */
-    suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
+    override suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
         try {
             val request = YoutubeDLRequest(url)
             

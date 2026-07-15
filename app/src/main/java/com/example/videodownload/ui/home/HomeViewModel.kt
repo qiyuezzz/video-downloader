@@ -3,71 +3,27 @@ package com.example.videodownload.ui.home
 import android.app.Application
 import android.content.ClipboardManager
 import android.content.Context
-import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.videodownload.data.DownloadRecordCodec
 import com.example.videodownload.data.SettingsDataStore
+import com.example.videodownload.data.model.DownloadHistoryItem
 import com.example.videodownload.data.model.DownloadState
+import com.example.videodownload.data.model.DownloadTask
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.downloader.VideoDownloader
 import com.example.videodownload.parser.BilibiliNativeParser
+import com.example.videodownload.parser.ParseCoordinator
 import com.example.videodownload.parser.TwitterApiParser
 import com.example.videodownload.parser.YtDlpParser
-import com.example.videodownload.util.NetworkConstants
+import com.example.videodownload.util.UrlNormalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.UUID
-import java.util.regex.Pattern
-
-/**
- * 解析状态
- */
-sealed class ParseState {
-    data object Idle : ParseState()
-    data object Loading : ParseState()
-    data class Success(val videoInfo: VideoInfo) : ParseState()
-    data class Error(val message: String) : ParseState()
-}
-
-/**
- * 一次性 UI 事件
- */
-sealed class HomeEvent {
-    data object ShowDownloadOptions : HomeEvent()
-    data class ShowDuplicateConfirm(val videoInfo: VideoInfo, val formats: List<VideoFormat>) : HomeEvent()
-}
-
-data class DownloadTask(
-    val id: String,
-    val title: String,
-    val thumbnailUrl: String?,
-    val state: DownloadState,
-    val videoUrl: String, // 视频文件URL
-    val webpageUrl: String, // 原始帖子链接，用于跨平台重复检测
-    // 持久化所需字段（断点续传）
-    val fileName: String = "",
-    val ext: String = "mp4",
-    val directoryUri: String = "",
-    val fileUri: String = "",
-    val totalBytes: Long = 0,
-)
-
-data class DownloadHistoryItem(
-    val id: String,
-    val title: String,
-    val thumbnailUrl: String?,
-    val fileName: String,
-    val fileUri: String,
-    val videoUrl: String, // 视频文件URL
-    val webpageUrl: String, // 原始帖子链接
-    val timestamp: Long
-)
 
 /**
  * 主页 ViewModel
@@ -76,9 +32,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val downloader = VideoDownloader(application)
     private val settingsDataStore = SettingsDataStore(application)
-    private val ytParser = YtDlpParser()
-    private val twitterApiParser = TwitterApiParser()
-    private val bilibiliNativeParser = BilibiliNativeParser()
+    private val parseCoordinator = ParseCoordinator(
+        specializedParsers = listOf(TwitterApiParser(), BilibiliNativeParser()),
+        fallbackParser = YtDlpParser(),
+    )
+    private val urlNormalizer = UrlNormalizer()
 
     private val _parseState = MutableStateFlow<ParseState>(ParseState.Idle)
     val parseState: StateFlow<ParseState> = _parseState
@@ -100,7 +58,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsDataStore.downloadHistory.collect { json ->
                 if (json != null) {
-                    _history.value = parseHistoryJson(json)
+                    _history.value = DownloadRecordCodec.decodeHistory(json)
                 }
             }
         }
@@ -118,7 +76,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     private suspend fun restoreActiveDownloads() {
         val json = settingsDataStore.activeDownloads.first() ?: return
-        val tasks = parseActiveDownloadsJson(json)
+        val tasks = DownloadRecordCodec.decodeActiveTasks(json)
         if (tasks.isEmpty()) return
 
         val restored = mutableListOf<DownloadTask>()
@@ -126,7 +84,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             // 检查文件是否仍然存在
             if (task.fileUri.isNotEmpty()) {
                 try {
-                    val fileUri = Uri.parse(task.fileUri)
+                    val fileUri = task.fileUri.toUri()
                     val file = DocumentFile.fromSingleUri(getApplication(), fileUri)
                     if (file != null && file.exists() && file.length() > 0) {
                         restored.add(task.copy(state = DownloadState.Interrupted))
@@ -151,98 +109,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * 将活跃下载任务序列化为 JSON 并持久化
      */
     private suspend fun saveActiveDownloads() {
-        val tasks = _downloadTasks.value.filter { task ->
-            // 只持久化未完成的任务
-            task.state !is DownloadState.Success
-        }
-        val array = JSONArray()
-        tasks.forEach { task ->
-            val obj = JSONObject().apply {
-                put("id", task.id)
-                put("title", task.title)
-                put("thumbnailUrl", task.thumbnailUrl ?: JSONObject.NULL)
-                put("videoUrl", task.videoUrl)
-                put("webpageUrl", task.webpageUrl)
-                put("fileName", task.fileName)
-                put("ext", task.ext)
-                put("directoryUri", task.directoryUri)
-                put("fileUri", task.fileUri)
-                put("totalBytes", task.totalBytes)
-            }
-            array.put(obj)
-        }
-        settingsDataStore.saveActiveDownloads(array.toString())
-    }
-
-    private fun parseActiveDownloadsJson(json: String): List<DownloadTask> {
-        val list = mutableListOf<DownloadTask>()
-        try {
-            val array = JSONArray(json)
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                list.add(
-                    DownloadTask(
-                        id = obj.getString("id"),
-                        title = obj.getString("title"),
-                        thumbnailUrl = obj.optString("thumbnailUrl", "").ifEmpty { null },
-                        state = DownloadState.Idle, // 临时状态，恢复时会被覆盖
-                        videoUrl = obj.getString("videoUrl"),
-                        webpageUrl = obj.optString("webpageUrl", ""),
-                        fileName = obj.optString("fileName", ""),
-                        ext = obj.optString("ext", "mp4"),
-                        directoryUri = obj.optString("directoryUri", ""),
-                        fileUri = obj.optString("fileUri", ""),
-                        totalBytes = obj.optLong("totalBytes", 0),
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return list
+        settingsDataStore.saveActiveDownloads(
+            DownloadRecordCodec.encodeActiveTasks(_downloadTasks.value)
+        )
     }
 
     // ==================== 历史记录 ====================
 
-    private fun parseHistoryJson(json: String): List<DownloadHistoryItem> {
-        val list = mutableListOf<DownloadHistoryItem>()
-        try {
-            val array = JSONArray(json)
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                list.add(DownloadHistoryItem(
-                    id = obj.getString("id"),
-                    title = obj.getString("title"),
-                    thumbnailUrl = obj.optString("thumbnailUrl", "").ifEmpty { null },
-                    fileName = obj.getString("fileName"),
-                    fileUri = obj.getString("fileUri"),
-                    videoUrl = obj.optString("videoUrl", ""),
-                    webpageUrl = obj.optString("webpageUrl", ""),
-                    timestamp = obj.getLong("timestamp")
-                ))
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return list
-    }
-
     private suspend fun saveHistory() {
-        val array = JSONArray()
-        _history.value.take(50).forEach { item -> // 只保留最近 50 条
-            val obj = JSONObject().apply {
-                put("id", item.id)
-                put("title", item.title)
-                put("thumbnailUrl", item.thumbnailUrl ?: JSONObject.NULL)
-                put("fileName", item.fileName)
-                put("fileUri", item.fileUri)
-                put("videoUrl", item.videoUrl)
-                put("webpageUrl", item.webpageUrl)
-                put("timestamp", item.timestamp)
-            }
-            array.put(obj)
-        }
-        settingsDataStore.saveDownloadHistory(array.toString())
+        settingsDataStore.saveDownloadHistory(DownloadRecordCodec.encodeHistory(_history.value))
     }
 
     private fun addToHistory(task: DownloadTask, successState: DownloadState.Success) {
@@ -271,7 +146,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch(Dispatchers.IO) {
                 itemsToRemove.forEach { item ->
                     try {
-                        val uri = Uri.parse(item.fileUri)
+                        val uri = item.fileUri.toUri()
                         androidx.documentfile.provider.DocumentFile.fromSingleUri(getApplication(), uri)?.delete()
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -302,7 +177,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun pasteAndParse() {
         val text = readClipboardText() ?: return
-        if (extractUrl(text) != null) {
+        if (urlNormalizer.extract(text) != null) {
             parseUrl(text)
         }
     }
@@ -312,7 +187,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun readClipboard() {
         val text = readClipboardText()
-        val extracted = if (text != null) extractUrl(text) else null
+        val extracted = if (text != null) urlNormalizer.extract(text) else null
         if (extracted != null) {
             _clipboardUrl.value = extracted
         } else {
@@ -324,7 +199,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * 解析链接 - 优先使用专用 API (应对推特限制级/多视频)，然后回退到 yt-dlp
      */
     fun parseUrl(rawInput: String) {
-        val rawUrl = extractUrl(rawInput)
+        val rawUrl = urlNormalizer.extract(rawInput)
         if (rawUrl == null) {
             _parseState.value = ParseState.Error("未能从输入中识别到有效的链接")
             return
@@ -334,30 +209,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                val url = cleanUrl(rawUrl)
-                // 1. 如果是 Twitter/X 链接，优先尝试专门的 API
-                if (isXUrl(url)) {
-                    val twitterInfo = twitterApiParser.parse(url)
-                    if (twitterInfo != null && twitterInfo.formats.isNotEmpty()) {
-                        _parseState.value = ParseState.Success(twitterInfo)
-                        _uiEvent.emit(HomeEvent.ShowDownloadOptions)
-                        return@launch
-                    }
-                }
-
-                // 2. 如果是 B站链接，优先尝试原生极速 API
-                if (url.contains("bilibili.com")) {
-                    val biliInfo = bilibiliNativeParser.parse(url)
-                    if (biliInfo != null && biliInfo.formats.isNotEmpty()) {
-                        _parseState.value = ParseState.Success(biliInfo)
-                        _uiEvent.emit(HomeEvent.ShowDownloadOptions)
-                        return@launch
-                    }
-                }
-
-                // 3. 使用 yt-dlp 解析 (通用或作为回退)
-                val videoInfo = ytParser.parse(url)
-                if (videoInfo != null && videoInfo.formats.isNotEmpty()) {
+                val url = urlNormalizer.normalize(rawUrl)
+                val videoInfo = parseCoordinator.parse(url)
+                if (videoInfo != null) {
                     _parseState.value = ParseState.Success(videoInfo)
                     _uiEvent.emit(HomeEvent.ShowDownloadOptions)
                 } else {
@@ -433,7 +287,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         videoUrl = format.url,
                         fileName = fileName,
                         ext = format.ext,
-                        directoryUri = Uri.parse(saveUri),
+                        directoryUri = saveUri.toUri(),
                         referer = videoInfo.webpageUrl
                     ).collect { state ->
                         _downloadTasks.update { current ->
@@ -486,7 +340,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // 获取已下载的文件大小
-            val existingFileUri = if (task.fileUri.isNotEmpty()) Uri.parse(task.fileUri) else null
+            val existingFileUri = if (task.fileUri.isNotEmpty()) task.fileUri.toUri() else null
             var downloadedBytes = 0L
             if (existingFileUri != null) {
                 try {
@@ -507,7 +361,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     videoUrl = task.videoUrl,
                     fileName = task.fileName,
                     ext = task.ext,
-                    directoryUri = Uri.parse(directoryUri),
+                    directoryUri = directoryUri.toUri(),
                     referer = task.webpageUrl,
                     existingFileUri = existingFileUri,
                     alreadyDownloadedBytes = downloadedBytes,
@@ -542,7 +396,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (deleteFile && task.fileUri.isNotEmpty()) {
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    val uri = Uri.parse(task.fileUri)
+                    val uri = task.fileUri.toUri()
                     DocumentFile.fromSingleUri(getApplication(), uri)?.delete()
                 } catch (_: Exception) {}
             }
@@ -565,82 +419,4 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { saveActiveDownloads() }
     }
 
-    /**
-     * 简单的链接检测并提取 - 适配带标题的分享文案 (如 B站)
-     */
-    private fun extractUrl(text: String): String? {
-        val pattern = Pattern.compile("""https?://[\w\-_]+(\.[\w\-_]+)+[\w\-\.,@?^=%&:/~+#]*""")
-        val matcher = pattern.matcher(text)
-        return if (matcher.find()) matcher.group() else null
-    }
-
-    private fun isXUrl(url: String): Boolean {
-        return url.contains("x.com") || url.contains("twitter.com")
-    }
-
-    companion object {
-        /** B站视频/Bangumi ID 提取正则 */
-        private val BILI_ID_REGEX = Regex(
-            """bilibili\.com/(?:video/|bangumi/play/)(BV[\w]+|av\d+|ep\d+|ss\d+)""",
-            RegexOption.IGNORE_CASE
-        )
-    }
-
-    /**
-     * 链接清洗：去除追踪参数、统一格式，提高 yt-dlp 识别率
-     */
-    private suspend fun cleanUrl(url: String): String {
-        var result = url.trim()
-
-        // B站 b23.tv 短链接先解析
-        if (result.contains("b23.tv")) {
-            val resolved = resolveB23Url(result)
-            if (resolved != null) {
-                result = resolved
-            }
-        }
-
-        // B站: 提取 BV/av/ep/ss 号，构造干净的 www 链接
-        val biliMatch = BILI_ID_REGEX.find(result)
-        if (biliMatch != null) {
-            val id = biliMatch.groupValues[1]
-            return "https://www.bilibili.com/video/$id"
-        }
-
-        // B站兜底: 统一子域名为 www
-        if (result.contains("bilibili.com")) {
-            // 确保是 https 并强制使用 www 域名，这是 yt-dlp 识别最稳健的格式
-            result = result.replace("http://", "https://")
-                .replace("m.bilibili.com", "www.bilibili.com")
-            
-            if (result.contains("?")) {
-                result = result.substringBefore("?")
-            }
-            return result
-        }
-
-        // Instagram/X: 去除 ? 后的追踪参数
-        if (result.contains("instagram.com") || isXUrl(result)) {
-            return result.substringBefore("?")
-        }
-
-        return result
-    }
-
-    /** 解析 b23.tv 短链接，返回干净的长链接 */
-    private suspend fun resolveB23Url(shortUrl: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val client = okhttp3.OkHttpClient.Builder()
-                .followRedirects(false)
-                .build()
-            val request = okhttp3.Request.Builder()
-                .url(shortUrl)
-                .header("User-Agent", NetworkConstants.USER_AGENT)
-                .build()
-            val response = client.newCall(request).execute()
-            response.header("Location")
-        } catch (e: Exception) {
-            null
-        }
-    }
 }

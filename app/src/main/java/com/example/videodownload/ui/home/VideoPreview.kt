@@ -31,8 +31,8 @@ import okhttp3.OkHttpClient
 @Composable
 fun VideoPreview(
     videoUrl: String,
+    modifier: Modifier = Modifier,
     webpageUrl: String = "",
-    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 

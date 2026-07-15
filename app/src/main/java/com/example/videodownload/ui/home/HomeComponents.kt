@@ -2,8 +2,8 @@ package com.example.videodownload.ui.home
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -117,7 +117,7 @@ fun NovaDeleteDialog(
  */
 fun checkFileAndRun(context: Context, uriString: String, action: () -> Unit) {
     try {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         val docFile = androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)
 
         if (docFile != null && docFile.exists()) {
@@ -135,7 +135,7 @@ fun checkFileAndRun(context: Context, uriString: String, action: () -> Unit) {
  */
 fun openVideo(context: Context, uriString: String) {
     checkFileAndRun(context, uriString) {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         val mimeType = context.contentResolver.getType(uri) ?: "video/*"
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mimeType)

@@ -2,6 +2,7 @@ package com.example.videodownload.parser
 
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
+import com.example.videodownload.util.NetworkClients
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -13,10 +14,15 @@ import java.util.regex.Pattern
  * 专门针对 X/Twitter 链接的轻量级 API 解析器
  * 用于解决 yt-dlp 无法获取敏感/限制级推文视频的问题
  */
-class TwitterApiParser {
-    private val client = OkHttpClient()
+class TwitterApiParser(
+    private val client: OkHttpClient = NetworkClients.standard,
+) : VideoParser {
 
-    suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
+    override fun supports(url: String): Boolean =
+        url.contains("x.com", ignoreCase = true) ||
+            url.contains("twitter.com", ignoreCase = true)
+
+    override suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
         try {
             val tweetId = extractTweetId(url) ?: return@withContext null
             val apiUrl = "https://api.vxtwitter.com/Twitter/status/$tweetId"
@@ -26,8 +32,10 @@ class TwitterApiParser {
                 .get()
                 .build()
 
-            val response = client.newCall(request).execute()
-            val jsonString = response.body?.string() ?: return@withContext null
+            val jsonString = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string()
+            } ?: return@withContext null
             val json = JSONObject(jsonString)
 
             if (!json.optBoolean("hasMedia", false)) return@withContext null

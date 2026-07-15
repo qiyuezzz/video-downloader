@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.videodownload.data.model.DownloadState
+import com.example.videodownload.data.model.DownloadTask
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.ui.theme.*

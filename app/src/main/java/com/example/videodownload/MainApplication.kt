@@ -5,16 +5,17 @@ import android.util.Log
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLException
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
  * Application 类，用于全局初始化
  */
 class MainApplication : Application() {
-    @OptIn(DelicateCoroutinesApi::class)
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         try {
@@ -22,7 +23,7 @@ class MainApplication : Application() {
             FFmpeg.getInstance().init(this)
             
             // 后台静默更新 yt-dlp 到最新稳定版，以应对 X/Twitter 等网站的频繁 API 变动
-            GlobalScope.launch(Dispatchers.IO) {
+            applicationScope.launch {
                 try {
                     YoutubeDL.getInstance().updateYoutubeDL(this@MainApplication, YoutubeDL.UpdateChannel.STABLE)
                     Log.d("MainApplication", "yt-dlp updated successfully")
