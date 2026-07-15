@@ -2,14 +2,18 @@ package com.example.videodownload.ui.settings
 
 import android.app.Application
 import android.util.Log
+import androidx.core.net.toUri
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.videodownload.data.SettingsDataStore
+import com.example.videodownload.parser.YtDlpEngine
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,6 +36,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val settingsDataStore = SettingsDataStore(application)
 
     val saveLocation = settingsDataStore.saveLocation
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val saveLocationName = settingsDataStore.saveLocation
+        .map { uri ->
+            if (uri == null) return@map null
+            withContext(Dispatchers.IO) {
+                DocumentFile.fromTreeUri(getApplication(), uri.toUri())?.name
+                    ?: uri.toUri().lastPathSegment
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val preferredQuality = settingsDataStore.preferredQuality
@@ -68,6 +82,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
+                    YtDlpEngine.ensureInitialized(getApplication())
                     YoutubeDL.getInstance().updateYoutubeDL(
                         getApplication(),
                         YoutubeDL.UpdateChannel.STABLE
@@ -77,8 +92,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _updateState.value = UpdateState.Success("更新成功 (状态: $result)")
             } catch (e: Exception) {
                 Log.e("SettingsViewModel", "yt-dlp update failed", e)
-                _updateState.value = UpdateState.Error(e.message ?: "未知错误")
+                _updateState.value = UpdateState.Error(detailedMessage(e))
             }
         }
+    }
+
+    private fun detailedMessage(error: Throwable): String {
+        val messages = generateSequence(error) { it.cause }
+            .mapNotNull { it.message?.takeIf(String::isNotBlank) }
+            .distinct()
+            .toList()
+        return messages.joinToString("：").ifBlank { error.javaClass.simpleName }
     }
 }

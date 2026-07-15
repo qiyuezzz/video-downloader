@@ -1,5 +1,6 @@
 package com.example.videodownload.parser
 
+import android.content.Context
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.util.NetworkConstants
@@ -11,7 +12,9 @@ import kotlinx.coroutines.withContext
 /**
  * 基于 yt-dlp 的视频解析器
  */
-class YtDlpParser : VideoParser {
+class YtDlpParser(
+    private val context: Context,
+) : VideoParser {
 
     override fun supports(url: String): Boolean = true
 
@@ -20,6 +23,7 @@ class YtDlpParser : VideoParser {
      */
     override suspend fun parse(url: String): VideoInfo? = withContext(Dispatchers.IO) {
         try {
+            YtDlpEngine.ensureInitialized(context)
             val request = YoutubeDLRequest(url)
             
             // 基础配置

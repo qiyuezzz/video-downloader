@@ -43,13 +43,19 @@ class VideoDownloader(private val context: Context) {
         fileName: String,
         ext: String,
         directoryUri: Uri,
+        platformFolder: String? = null,
         referer: String? = null,
         existingFileUri: Uri? = null,
         alreadyDownloadedBytes: Long = 0L,
     ): Flow<DownloadState> = flow {
         try {
-            val dir = DocumentFile.fromTreeUri(context, directoryUri)
+            val rootDir = DocumentFile.fromTreeUri(context, directoryUri)
                 ?: throw IOException("无法访问保存目录")
+            val dir = platformFolder?.let { folderName ->
+                rootDir.findFile(folderName)?.takeIf { it.isDirectory }
+                    ?: rootDir.createDirectory(folderName)
+                    ?: throw IOException("无法创建平台目录：$folderName")
+            } ?: rootDir
 
             val safeName = fileName.replace(ILLEGAL_CHAR_REGEX, "_")
 

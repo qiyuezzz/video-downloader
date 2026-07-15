@@ -38,10 +38,6 @@ private val LightColorScheme = lightColorScheme(
     outlineVariant = NovaOutlineVariant,
 )
 
-/**
- * 深色方案 — OLED 纯黑背景
- * primary: 亮蓝 #90CAF9，在纯黑上清晰可见，按钮文字使用深蓝
- */
 private val DarkColorScheme = darkColorScheme(
     primary = NovaPrimaryDark,
     onPrimary = NovaOnPrimaryDark,
@@ -62,7 +58,7 @@ private val DarkColorScheme = darkColorScheme(
 
     background = NovaBackgroundDark,
     onBackground = NovaOnSurfaceDark,
-    surface = NovaBackgroundDark, // 改为纯黑，防止灰色透出
+    surface = NovaSurfaceDark,
     onSurface = NovaOnSurfaceDark,
     surfaceVariant = NovaSurfaceVariantDark,
     onSurfaceVariant = NovaOnSurfaceVariantDark,

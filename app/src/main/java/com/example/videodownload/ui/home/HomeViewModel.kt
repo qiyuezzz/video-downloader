@@ -16,10 +16,12 @@ import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.downloader.VideoDownloader
 import com.example.videodownload.parser.BilibiliNativeParser
+import com.example.videodownload.parser.InstagramAnonymousParser
 import com.example.videodownload.parser.ParseCoordinator
 import com.example.videodownload.parser.TwitterApiParser
 import com.example.videodownload.parser.YtDlpParser
 import com.example.videodownload.util.UrlNormalizer
+import com.example.videodownload.util.VideoPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -33,8 +35,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val downloader = VideoDownloader(application)
     private val settingsDataStore = SettingsDataStore(application)
     private val parseCoordinator = ParseCoordinator(
-        specializedParsers = listOf(TwitterApiParser(), BilibiliNativeParser()),
-        fallbackParser = YtDlpParser(),
+        specializedParsers = listOf(
+            TwitterApiParser(),
+            BilibiliNativeParser(),
+            InstagramAnonymousParser(),
+        ),
+        fallbackParser = YtDlpParser(application),
     )
     private val urlNormalizer = UrlNormalizer()
 
@@ -288,6 +294,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         fileName = fileName,
                         ext = format.ext,
                         directoryUri = saveUri.toUri(),
+                        platformFolder = VideoPlatform.folderName(videoInfo.webpageUrl),
                         referer = videoInfo.webpageUrl
                     ).collect { state ->
                         _downloadTasks.update { current ->
@@ -362,6 +369,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     fileName = task.fileName,
                     ext = task.ext,
                     directoryUri = directoryUri.toUri(),
+                    platformFolder = VideoPlatform.folderName(task.webpageUrl),
                     referer = task.webpageUrl,
                     existingFileUri = existingFileUri,
                     alreadyDownloadedBytes = downloadedBytes,

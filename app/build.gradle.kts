@@ -46,6 +46,12 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            // yt-dlp Android 封装会从 nativeLibraryDir 读取并解压 Python/FFmpeg 资源。
+            useLegacyPackaging = true
+        }
+    }
     lint {
         checkReleaseBuilds = false
         abortOnError = false

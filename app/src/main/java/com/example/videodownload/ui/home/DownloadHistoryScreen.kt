@@ -1,6 +1,7 @@
 package com.example.videodownload.ui.home
 
 import com.example.videodownload.data.model.DownloadHistoryItem
+import com.example.videodownload.util.VideoPlatform
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -10,14 +11,19 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +45,23 @@ fun DownloadHistoryScreen(
     onPlayVideo: (String, String) -> Unit
 ) {
     val history by viewModel.history.collectAsState()
+    val platformCounts = remember(history) {
+        history.groupingBy { VideoPlatform.folderName(it.webpageUrl) }.eachCount()
+    }
+    val platformFilters = remember(history, platformCounts) {
+        listOf("全部" to history.size) + PLATFORM_ORDER.mapNotNull { platform ->
+            platformCounts[platform]?.let { platform to it }
+        }
+    }
+    var selectedPlatform by rememberSaveable { mutableStateOf("全部") }
+    var useGridLayout by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(platformFilters) {
+        if (platformFilters.none { it.first == selectedPlatform }) selectedPlatform = "全部"
+    }
+    val filteredHistory = remember(history, selectedPlatform) {
+        if (selectedPlatform == "全部") history
+        else history.filter { VideoPlatform.folderName(it.webpageUrl) == selectedPlatform }
+    }
     val context = LocalContext.current
 
     var isEditMode by remember { mutableStateOf(false) }
@@ -71,23 +94,36 @@ fun DownloadHistoryScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
-                    Text(
-                        if (isEditMode) "已选择 ${selectedItems.size} 项" else "下载历史",
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
+                    Column {
+                        Text(
+                            if (isEditMode) "已选择 ${selectedItems.size} 项" else "下载历史",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (!isEditMode) {
+                            Text(
+                                when {
+                                    history.isEmpty() -> "保存的视频会出现在这里"
+                                    selectedPlatform == "全部" -> "共 ${history.size} 个本地视频"
+                                    else -> "$selectedPlatform · ${filteredHistory.size} 个视频"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 },
                 actions = {
                     if (history.isNotEmpty()) {
                         if (isEditMode) {
                             FilledTonalIconButton(onClick = {
-                                if (selectedItems.size == history.size) {
-                                    selectedItems.clear()
+                                val visibleIds = filteredHistory.map { it.id }
+                                if (visibleIds.all { it in selectedItems }) {
+                                    selectedItems.removeAll(visibleIds.toSet())
                                 } else {
-                                    selectedItems.clear()
-                                    selectedItems.addAll(history.map { it.id })
+                                    selectedItems.addAll(visibleIds.filter { it !in selectedItems })
                                 }
                             }) {
                                 Icon(Icons.Filled.SelectAll, contentDescription = "全选")
@@ -116,7 +152,14 @@ fun DownloadHistoryScreen(
                                 )
                             }
                         } else {
-                            FilledTonalIconButton(onClick = { isEditMode = true }) {
+                            IconButton(onClick = { useGridLayout = !useGridLayout }) {
+                                Icon(
+                                    if (useGridLayout) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView,
+                                    contentDescription = if (useGridLayout) "切换到列表" else "切换到网格",
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                            IconButton(onClick = { isEditMode = true }) {
                                 Icon(
                                     Icons.Filled.Edit,
                                     contentDescription = "编辑",
@@ -142,61 +185,195 @@ fun DownloadHistoryScreen(
         ) {
             if (history.isEmpty()) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
+                            Surface(
                                 modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
-                                contentAlignment = Alignment.Center
+                                    .size(88.dp),
+                                shape = RoundedCornerShape(28.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
                             ) {
-                                Icon(
-                                    Icons.Outlined.History,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Outlined.VideoLibrary,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(38.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             Text(
-                                text = "下载列表空空如也",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "还没有下载内容",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "去首页粘贴链接开始下载吧",
+                                text = "返回首页粘贴视频链接，选择画质后即可保存到本地。",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
                         }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                    items(history, key = { it.id }) { item ->
-                        NovaHistoryCard(
-                            item = item,
-                            isEditMode = isEditMode,
-                            isSelected = selectedItems.contains(item.id),
-                            onClick = {
-                                if (isEditMode) {
-                                    toggleSelection(item.id)
-                                } else {
-                                    checkFileAndRun(context, item.fileUri) {
-                                        onPlayVideo(item.fileUri, item.title)
-                                    }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(platformFilters, key = { it.first }) { (platform, count) ->
+                                FilterChip(
+                                    selected = selectedPlatform == platform,
+                                    onClick = { selectedPlatform = platform },
+                                    label = { Text("$platform · $count") },
+                                    leadingIcon = if (selectedPlatform == platform) {
+                                        {
+                                            Icon(
+                                                Icons.Filled.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    } else null,
+                                )
+                            }
+                        }
+                        if (useGridLayout) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = HISTORY_CONTENT_PADDING,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(filteredHistory.size, key = { filteredHistory[it].id }) { index ->
+                                    val item = filteredHistory[index]
+                                    NovaHistoryGridCard(
+                                        item = item,
+                                        isEditMode = isEditMode,
+                                        isSelected = selectedItems.contains(item.id),
+                                        onClick = {
+                                            if (isEditMode) {
+                                                toggleSelection(item.id)
+                                            } else {
+                                                checkFileAndRun(context, item.fileUri) {
+                                                    onPlayVideo(item.fileUri, item.title)
+                                                }
+                                            }
+                                        },
+                                    )
                                 }
                             }
-                        )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                contentPadding = HISTORY_CONTENT_PADDING,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                items(filteredHistory, key = { it.id }) { item ->
+                                    NovaHistoryCard(
+                                        item = item,
+                                        isEditMode = isEditMode,
+                                        isSelected = selectedItems.contains(item.id),
+                                        onClick = {
+                                            if (isEditMode) {
+                                                toggleSelection(item.id)
+                                            } else {
+                                                checkFileAndRun(context, item.fileUri) {
+                                                    onPlayVideo(item.fileUri, item.title)
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
+            }
+        }
+    }
+
+@Composable
+private fun NovaHistoryGridCard(
+    item: DownloadHistoryItem,
+    isEditMode: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        shadowElevation = if (isSelected) 3.dp else 1.dp,
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center,
+            ) {
+                item.thumbnailUrl?.let { thumbnail ->
+                    AsyncImage(
+                        model = thumbnail,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.45f)) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.padding(6.dp).size(18.dp),
+                    )
+                }
+                if (isEditMode) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = null,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = Color.White,
+                            checkmarkColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                    )
+                }
+            }
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = formatDate(item.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -217,7 +394,7 @@ fun NovaHistoryCard(
     )
     val containerColor by animateColorAsState(
         if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        else MaterialTheme.colorScheme.surfaceVariant,
+        else MaterialTheme.colorScheme.surface,
         label = "Color"
     )
 
@@ -227,10 +404,13 @@ fun NovaHistoryCard(
             .padding(cardPadding)
             .clip(RoundedCornerShape(20.dp))
             .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = containerColor,
-        shadowElevation = if (isSelected) 4.dp else 0.dp,
-        border = if (isEditMode) BorderStroke(1.dp, borderColor) else null
+        shadowElevation = if (isSelected) 4.dp else 1.dp,
+        border = BorderStroke(
+            1.dp,
+            if (isEditMode) borderColor else MaterialTheme.colorScheme.outlineVariant,
+        ),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -310,3 +490,12 @@ fun NovaHistoryCard(
 
 private fun formatDate(timestamp: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+private val PLATFORM_ORDER = listOf("Bilibili", "X", "Instagram", "YouTube", "其他")
+
+private val HISTORY_CONTENT_PADDING = PaddingValues(
+    start = 20.dp,
+    top = 4.dp,
+    end = 20.dp,
+    bottom = 20.dp,
+)
