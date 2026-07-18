@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">视频下载器</string>
+    <string name="download_notification_channel">视频下载</string>
+    <string name="download_notification_title">正在下载视频</string>
 </resources>

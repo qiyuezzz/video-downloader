@@ -22,6 +22,7 @@ object DownloadRecordCodec {
                 put("directoryUri", task.directoryUri)
                 put("fileUri", task.fileUri)
                 put("totalBytes", task.totalBytes)
+                put("workId", task.workId)
             })
         }
         return array.toString()
@@ -40,6 +41,7 @@ object DownloadRecordCodec {
             directoryUri = obj.optString("directoryUri", ""),
             fileUri = obj.optString("fileUri", ""),
             totalBytes = obj.optLong("totalBytes", 0),
+            workId = obj.optString("workId", ""),
         )
     }
 
@@ -55,6 +57,7 @@ object DownloadRecordCodec {
                 put("videoUrl", item.videoUrl)
                 put("webpageUrl", item.webpageUrl)
                 put("timestamp", item.timestamp)
+                put("platform", item.platform)
             })
         }
         return array.toString()
@@ -70,6 +73,7 @@ object DownloadRecordCodec {
             videoUrl = obj.optString("videoUrl", ""),
             webpageUrl = obj.optString("webpageUrl", ""),
             timestamp = obj.getLong("timestamp"),
+            platform = obj.optString("platform", ""),
         )
     }
 
@@ -82,5 +86,5 @@ object DownloadRecordCodec {
     private fun JSONObject.nullableString(key: String): String? =
         optString(key, "").takeUnless { it.isBlank() || it == "null" }
 
-    private const val MAX_HISTORY_SIZE = 50
+    private const val MAX_HISTORY_SIZE = 500
 }

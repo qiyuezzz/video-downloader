@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,9 +45,9 @@ fun DownloadHistoryScreen(
     viewModel: HomeViewModel,
     onPlayVideo: (String, String) -> Unit
 ) {
-    val history by viewModel.history.collectAsState()
+    val history by viewModel.history.collectAsStateWithLifecycle()
     val platformCounts = remember(history) {
-        history.groupingBy { VideoPlatform.folderName(it.webpageUrl) }.eachCount()
+        history.groupingBy(::historyPlatform).eachCount()
     }
     val platformFilters = remember(history, platformCounts) {
         listOf("全部" to history.size) + PLATFORM_ORDER.mapNotNull { platform ->
@@ -60,7 +61,7 @@ fun DownloadHistoryScreen(
     }
     val filteredHistory = remember(history, selectedPlatform) {
         if (selectedPlatform == "全部") history
-        else history.filter { VideoPlatform.folderName(it.webpageUrl) == selectedPlatform }
+        else history.filter { historyPlatform(it) == selectedPlatform }
     }
     val context = LocalContext.current
 
@@ -331,7 +332,7 @@ private fun NovaHistoryGridCard(
                     .background(Color.Black),
                 contentAlignment = Alignment.Center,
             ) {
-                item.thumbnailUrl?.let { thumbnail ->
+                historyPreviewModel(item)?.let { thumbnail ->
                     AsyncImage(
                         model = thumbnail,
                         contentDescription = null,
@@ -436,9 +437,9 @@ fun NovaHistoryCard(
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                if (item.thumbnailUrl != null) {
+                historyPreviewModel(item)?.let { thumbnail ->
                     AsyncImage(
-                        model = item.thumbnailUrl,
+                        model = thumbnail,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -490,6 +491,14 @@ fun NovaHistoryCard(
 
 private fun formatDate(timestamp: Long): String =
     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+
+private fun historyPlatform(item: DownloadHistoryItem): String =
+    item.platform.ifBlank { VideoPlatform.folderName(item.webpageUrl) }
+
+/** 网络封面不可用时让 Coil 从本地视频 URI 解码首帧。 */
+internal fun historyPreviewModel(item: DownloadHistoryItem): String? =
+    item.thumbnailUrl?.takeIf { it.startsWith("https://", ignoreCase = true) }
+        ?: item.fileUri.takeIf(String::isNotBlank)
 
 private val PLATFORM_ORDER = listOf("Bilibili", "X", "Instagram", "YouTube", "其他")
 

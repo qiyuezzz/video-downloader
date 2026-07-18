@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.videodownload.data.SettingsDataStore
 
 private val QUALITY_OPTIONS = listOf(
@@ -38,10 +38,11 @@ private val QUALITY_OPTIONS = listOf(
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
 ) {
-    val saveLocation by viewModel.saveLocation.collectAsState()
-    val saveLocationName by viewModel.saveLocationName.collectAsState()
-    val preferredQuality by viewModel.preferredQuality.collectAsState()
-    val updateState by viewModel.updateState.collectAsState()
+    val saveLocation by viewModel.saveLocation.collectAsStateWithLifecycle()
+    val saveLocationName by viewModel.saveLocationName.collectAsStateWithLifecycle()
+    val preferredQuality by viewModel.preferredQuality.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val historyRestoreState by viewModel.historyRestoreState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val directoryPickerLauncher = rememberLauncherForActivityResult(
@@ -138,9 +139,22 @@ fun SettingsScreen(
                         } else {
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "按平台建立子目录 · 点击更换",
+                                text = when (val state = historyRestoreState) {
+                                    HistoryRestoreState.Idle -> "按平台建立子目录 · 点击更换"
+                                    HistoryRestoreState.Scanning -> "正在扫描已有视频…"
+                                    is HistoryRestoreState.Success -> if (state.restoredCount > 0) {
+                                        "已恢复 ${state.restoredCount} 个视频到历史记录"
+                                    } else {
+                                        "扫描完成，没有需要恢复的新视频"
+                                    }
+                                    is HistoryRestoreState.Error -> "扫描失败：${state.message}"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (historyRestoreState is HistoryRestoreState.Error) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                             )
                         }
                     }
@@ -214,7 +228,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "yt-dlp 负责解析所有非 X/Twitter 网站的视频链接。如遇到解析失败，可尝试更新到最新版本。",
+                        text = "Bilibili、X/Twitter 和 Instagram 优先使用各自的专用解析器；其他平台或专用解析失败时，再由 yt-dlp 兼容解析。如遇到通用解析失败，可尝试更新 yt-dlp。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,

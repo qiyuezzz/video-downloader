@@ -3,10 +3,16 @@ package com.example.videodownload.ui.home
 import android.app.Application
 import android.content.ClipboardManager
 import android.content.Context
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.example.videodownload.data.DownloadRecordCodec
 import com.example.videodownload.data.SettingsDataStore
 import com.example.videodownload.data.model.DownloadHistoryItem
@@ -14,7 +20,8 @@ import com.example.videodownload.data.model.DownloadState
 import com.example.videodownload.data.model.DownloadTask
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
-import com.example.videodownload.downloader.VideoDownloader
+import com.example.videodownload.downloader.VideoDownloadWorker
+import com.example.videodownload.downloader.DownloadProgress
 import com.example.videodownload.parser.BilibiliNativeParser
 import com.example.videodownload.parser.InstagramAnonymousParser
 import com.example.videodownload.parser.ParseCoordinator
@@ -23,6 +30,10 @@ import com.example.videodownload.parser.YtDlpParser
 import com.example.videodownload.util.UrlNormalizer
 import com.example.videodownload.util.VideoPlatform
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -32,7 +43,8 @@ import java.util.UUID
  */
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val downloader = VideoDownloader(application)
+    private val workManager = WorkManager.getInstance(application)
+    private val workObservers = mutableMapOf<String, Job>()
     private val settingsDataStore = SettingsDataStore(application)
     private val parseCoordinator = ParseCoordinator(
         specializedParsers = listOf(
@@ -60,16 +72,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val clipboardUrl: StateFlow<String?> = _clipboardUrl
 
     init {
-        // 加载历史记录
         viewModelScope.launch {
-            settingsDataStore.downloadHistory.collect { json ->
-                if (json != null) {
-                    _history.value = DownloadRecordCodec.decodeHistory(json)
-                }
+            settingsDataStore.downloadHistory.collectLatest { json ->
+                _history.value = json?.let(DownloadRecordCodec::decodeHistory).orEmpty()
             }
         }
-
-        // 恢复中断的下载任务
         viewModelScope.launch {
             restoreActiveDownloads()
         }
@@ -85,29 +92,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val tasks = DownloadRecordCodec.decodeActiveTasks(json)
         if (tasks.isEmpty()) return
 
-        val restored = mutableListOf<DownloadTask>()
-        for (task in tasks) {
-            // 检查文件是否仍然存在
-            if (task.fileUri.isNotEmpty()) {
-                try {
-                    val fileUri = task.fileUri.toUri()
-                    val file = DocumentFile.fromSingleUri(getApplication(), fileUri)
-                    if (file != null && file.exists() && file.length() > 0) {
-                        restored.add(task.copy(state = DownloadState.Interrupted))
-                    }
-                } catch (_: Exception) {
-                    // 文件不可访问，跳过
-                }
+        _downloadTasks.value = tasks.map { it.copy(state = DownloadState.Interrupted) }
+        tasks.forEach { task ->
+            if (task.workId.isNotEmpty()) {
+                observeWork(task.id, task.workId)
             }
-        }
-
-        if (restored.isNotEmpty()) {
-            _downloadTasks.value = restored
-        }
-
-        // 清理已不存在的任务
-        if (restored.size != tasks.size) {
-            saveActiveDownloads()
         }
     }
 
@@ -127,6 +116,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun addToHistory(task: DownloadTask, successState: DownloadState.Success) {
+        val completedUri = successState.fileUri.orEmpty()
+        if (completedUri.isNotEmpty() && _history.value.any { it.fileUri == completedUri }) return
         val newItem = DownloadHistoryItem(
             id = UUID.randomUUID().toString(),
             title = task.title,
@@ -135,7 +126,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             fileUri = successState.fileUri ?: "",
             videoUrl = task.videoUrl,
             webpageUrl = task.webpageUrl,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            platform = VideoPlatform.folderName(task.webpageUrl),
         )
         _history.update { current -> listOf(newItem) + current }
         viewModelScope.launch { saveHistory() }
@@ -155,7 +147,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         val uri = item.fileUri.toUri()
                         androidx.documentfile.provider.DocumentFile.fromSingleUri(getApplication(), uri)?.delete()
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        Log.w(TAG, "删除历史文件失败", e)
                     }
                 }
             }
@@ -223,12 +215,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     _parseState.value = ParseState.Error("解析失败，未找到可用的视频格式")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val message = e.message ?: ""
                 val friendlyMessage = when {
                     message.contains("412") -> "B站解析受限 (412)，请尝试重试或切换网络"
                     message.contains("403") -> "访问被拒绝 (403)，请检查链接或稍后再试"
                     message.contains("Incomplete YouTube ID") -> "链接格式不正确"
+                    message.contains("No video could be found in this tweet", ignoreCase = true) ->
+                        "该推文未返回可下载视频，可能是引用推文、受限内容或链接已失效"
+                    message.contains("Instagram sent an empty media response", ignoreCase = true) ->
+                        "Instagram 未返回公开视频，请确认该内容无需登录即可访问"
                     else -> "解析出错: ${e.message ?: "未知错误"}"
                 }
                 _parseState.value = ParseState.Error(friendlyMessage)
@@ -282,44 +280,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     fileName = fileName,
                     ext = format.ext,
                     directoryUri = saveUri,
+                    totalBytes = format.filesize ?: 0,
                 )
 
                 _downloadTasks.update { current -> listOf(newTask) + current }
-                // 持久化新任务
-                saveActiveDownloads()
-
-                launch {
-                    downloader.downloadFlow(
-                        videoUrl = format.url,
-                        fileName = fileName,
-                        ext = format.ext,
-                        directoryUri = saveUri.toUri(),
-                        platformFolder = VideoPlatform.folderName(videoInfo.webpageUrl),
-                        referer = videoInfo.webpageUrl
-                    ).collect { state ->
-                        _downloadTasks.update { current ->
-                            current.map { task ->
-                                if (task.id == taskId) {
-                                    val updatedTask = task.copy(
-                                        state = state,
-                                        // 从 Progress/Success 中捕获文件 URI
-                                        fileUri = when (state) {
-                                            is DownloadState.Progress -> state.fileUri ?: task.fileUri
-                                            is DownloadState.Success -> state.fileUri ?: task.fileUri
-                                            else -> task.fileUri
-                                        }
-                                    )
-                                    if (state is DownloadState.Success) {
-                                        addToHistory(updatedTask, state)
-                                    }
-                                    updatedTask
-                                } else task
-                            }
-                        }
-                        // 每次状态变更时持久化（包含文件 URI 等信息）
-                        saveActiveDownloads()
-                    }
-                }
+                enqueueDownload(newTask)
             }
         }
     }
@@ -355,44 +320,173 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     if (file != null && file.exists()) {
                         downloadedBytes = file.length()
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "读取断点文件大小失败", e)
+                }
             }
 
-            // 更新状态为下载中
+            val resumableTask = task.copy(
+                directoryUri = directoryUri,
+                state = DownloadState.Progress(
+                    percent = if (task.totalBytes > 0) {
+                        DownloadProgress.percent(downloadedBytes, task.totalBytes)
+                    } else {
+                        -1
+                    },
+                    fileUri = task.fileUri.ifEmpty { null },
+                    downloadedBytes = downloadedBytes,
+                    totalBytes = task.totalBytes,
+                ),
+            )
             _downloadTasks.update { current ->
-                current.map { if (it.id == taskId) it.copy(state = DownloadState.Progress(((downloadedBytes * 100) / (if (task.totalBytes > 0) task.totalBytes else 1)).toInt().coerceAtMost(99))) else it }
+                current.map { if (it.id == taskId) resumableTask else it }
             }
+            enqueueDownload(resumableTask, downloadedBytes)
+        }
+    }
 
-            launch {
-                downloader.downloadFlow(
-                    videoUrl = task.videoUrl,
-                    fileName = task.fileName,
-                    ext = task.ext,
-                    directoryUri = directoryUri.toUri(),
-                    platformFolder = VideoPlatform.folderName(task.webpageUrl),
-                    referer = task.webpageUrl,
-                    existingFileUri = existingFileUri,
-                    alreadyDownloadedBytes = downloadedBytes,
-                ).collect { state ->
-                    _downloadTasks.update { current ->
-                        current.map { t ->
-                            if (t.id == taskId) {
-                                val updated = t.copy(
-                                    state = state,
-                                    fileUri = if (state is DownloadState.Success) (state.fileUri ?: t.fileUri) else t.fileUri,
-                                    directoryUri = directoryUri,
-                                )
-                                if (state is DownloadState.Success) {
-                                    addToHistory(updated, state)
-                                }
-                                updated
-                            } else t
-                        }
+    private suspend fun enqueueDownload(task: DownloadTask, downloadedBytes: Long = 0) {
+        val input = VideoDownloadWorker.DownloadInput(
+            videoUrl = task.videoUrl,
+            fileName = task.fileName,
+            ext = task.ext,
+            directoryUri = task.directoryUri,
+            platformFolder = VideoPlatform.folderName(task.webpageUrl),
+            referer = task.webpageUrl,
+            existingFileUri = task.fileUri.takeIf { it.isNotEmpty() && downloadedBytes > 0 },
+            downloadedBytes = downloadedBytes,
+            totalBytes = task.totalBytes,
+        )
+        val request = try {
+            OneTimeWorkRequestBuilder<VideoDownloadWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .setInputData(input.toData())
+                .addTag("video-download-${task.id}")
+                .build()
+        } catch (e: IllegalStateException) {
+            _downloadTasks.update { current ->
+                current.map {
+                    if (it.id == task.id) it.copy(state = DownloadState.Error("下载参数过大，无法创建后台任务"))
+                    else it
+                }
+            }
+            saveActiveDownloads()
+            Log.e(TAG, "创建后台下载任务失败", e)
+            return
+        }
+        val workId = request.id.toString()
+        _downloadTasks.update { current ->
+            current.map { if (it.id == task.id) it.copy(workId = workId) else it }
+        }
+        saveActiveDownloads()
+        try {
+            workManager.enqueue(request)
+        } catch (e: IllegalStateException) {
+            _downloadTasks.update { current ->
+                current.map {
+                    if (it.id == task.id) it.copy(state = DownloadState.Error("无法提交后台下载任务"))
+                    else it
+                }
+            }
+            saveActiveDownloads()
+            Log.e(TAG, "提交后台下载任务失败", e)
+            return
+        }
+        observeWork(task.id, workId)
+    }
+
+    private fun observeWork(taskId: String, workId: String) {
+        workObservers.remove(taskId)?.cancel()
+        val id = runCatching { UUID.fromString(workId) }.getOrNull() ?: return
+        workObservers[taskId] = viewModelScope.launch {
+            try {
+                var lastSnapshot: String? = null
+                while (true) {
+                    val info = withContext(Dispatchers.IO) {
+                        workManager.getWorkInfoById(id).get()
+                    } ?: break
+                    val snapshot = workSnapshot(info)
+                    if (snapshot != lastSnapshot) {
+                        lastSnapshot = snapshot
+                        applyWorkInfo(taskId, info)
                     }
-                    saveActiveDownloads()
+                    if (info.state.isFinished) break
+                    delay(WORK_STATUS_POLL_INTERVAL_MS)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "读取后台下载状态失败", e)
+                _downloadTasks.update { current ->
+                    current.map {
+                        if (it.id == taskId) it.copy(state = DownloadState.Error("无法读取后台下载状态"))
+                        else it
+                    }
+                }
+                saveActiveDownloads()
+            } finally {
+                if (workObservers[taskId] === coroutineContext[Job]) {
+                    workObservers.remove(taskId)
                 }
             }
         }
+    }
+
+    private fun workSnapshot(info: WorkInfo): String = buildString {
+        append(info.state.name)
+        append('|').append(info.progress.getInt(VideoDownloadWorker.KEY_PERCENT, -1))
+        append('|').append(info.progress.getString(VideoDownloadWorker.KEY_FILE_URI).orEmpty())
+        append('|').append(info.progress.getLong(VideoDownloadWorker.KEY_DOWNLOADED_BYTES, 0))
+        append('|').append(info.progress.getLong(VideoDownloadWorker.KEY_TOTAL_BYTES, 0))
+        append('|').append(info.outputData.getString(VideoDownloadWorker.KEY_FILE_URI).orEmpty())
+        append('|').append(info.outputData.getString(VideoDownloadWorker.KEY_ERROR).orEmpty())
+    }
+
+    private suspend fun applyWorkInfo(taskId: String, info: WorkInfo) {
+        val task = _downloadTasks.value.firstOrNull { it.id == taskId } ?: return
+        val updated = when (info.state) {
+            WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> task.copy(state = DownloadState.Idle)
+            WorkInfo.State.RUNNING -> {
+                val fileUri = info.progress.getString(VideoDownloadWorker.KEY_FILE_URI)
+                    .orEmpty().ifEmpty { task.fileUri }
+                val downloadedBytes = info.progress.getLong(VideoDownloadWorker.KEY_DOWNLOADED_BYTES, 0)
+                val totalBytes = info.progress.getLong(VideoDownloadWorker.KEY_TOTAL_BYTES, task.totalBytes)
+                task.copy(
+                    state = DownloadState.Progress(
+                        info.progress.getInt(VideoDownloadWorker.KEY_PERCENT, -1),
+                        fileUri.ifEmpty { null },
+                        downloadedBytes,
+                        totalBytes,
+                    ),
+                    fileUri = fileUri,
+                    totalBytes = totalBytes,
+                )
+            }
+            WorkInfo.State.SUCCEEDED -> {
+                val success = DownloadState.Success(
+                    info.outputData.getString(VideoDownloadWorker.KEY_FILE_NAME) ?: task.fileName,
+                    info.outputData.getString(VideoDownloadWorker.KEY_FILE_URI),
+                )
+                val finished = task.copy(
+                    state = success,
+                    fileUri = success.fileUri ?: task.fileUri,
+                )
+                if (task.state !is DownloadState.Success) addToHistory(finished, success)
+                finished
+            }
+            WorkInfo.State.FAILED -> task.copy(
+                state = DownloadState.Error(
+                    info.outputData.getString(VideoDownloadWorker.KEY_ERROR) ?: "下载失败"
+                )
+            )
+            WorkInfo.State.CANCELLED -> task.copy(state = DownloadState.Interrupted)
+        }
+        _downloadTasks.update { current -> current.map { if (it.id == taskId) updated else it } }
+        saveActiveDownloads()
     }
 
     /**
@@ -401,12 +495,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun removeIncompleteTask(taskId: String, deleteFile: Boolean = false) {
         val task = _downloadTasks.value.find { it.id == taskId } ?: return
 
+        val cancellation = task.workId.takeIf(String::isNotEmpty)?.let { workId ->
+            runCatching { UUID.fromString(workId) }.getOrNull()?.let(workManager::cancelWorkById)
+        }
+        workObservers.remove(taskId)?.cancel()
+
         if (deleteFile && task.fileUri.isNotEmpty()) {
             viewModelScope.launch(Dispatchers.IO) {
                 try {
+                    cancellation?.result?.get()
                     val uri = task.fileUri.toUri()
                     DocumentFile.fromSingleUri(getApplication(), uri)?.delete()
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "删除未完成文件失败", e)
+                }
             }
         }
 
@@ -423,8 +525,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeDownloadTask(taskId: String) {
-        _downloadTasks.update { current -> current.filter { it.id != taskId } }
-        viewModelScope.launch { saveActiveDownloads() }
+        removeIncompleteTask(taskId)
+    }
+
+    companion object {
+        private const val TAG = "HomeViewModel"
+        private const val WORK_STATUS_POLL_INTERVAL_MS = 500L
     }
 
 }

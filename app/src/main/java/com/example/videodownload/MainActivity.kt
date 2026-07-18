@@ -1,17 +1,32 @@
 package com.example.videodownload
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.graphics.drawable.toDrawable
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import com.example.videodownload.navigation.AppNavigation
 import com.example.videodownload.ui.theme.VideoDownloadTheme
 
 class MainActivity : ComponentActivity() {
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* 用户拒绝时下载仍可继续，系统只会隐藏普通通知。 */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         enableEdgeToEdge()
 
         // 在 Compose 渲染前设置窗口背景，防止初始灰色闪烁

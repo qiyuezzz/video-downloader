@@ -1,5 +1,6 @@
 package com.example.videodownload.parser
 
+import android.util.Log
 import android.content.Context
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
@@ -35,6 +36,13 @@ class YtDlpParser(
                 request.addOption("--add-header", "Referer:${NetworkConstants.BILIBILI_BASE_URL}")
                 request.addOption("--allow-unplayable-formats")
                 request.addOption("--user-agent", NetworkConstants.USER_AGENT_DESKTOP)
+            } else if (TwitterApiParser.extractTweetReference(url) != null ||
+                url.contains("x.com/i/status/", ignoreCase = true) ||
+                url.contains("twitter.com/i/status/", ignoreCase = true)
+            ) {
+                // GraphQL 匿名接口容易把公开视频误判为无媒体，优先使用官方嵌入页的 syndication 数据。
+                request.addOption("--extractor-args", "twitter:api=syndication")
+                request.addOption("--user-agent", "Googlebot")
             } else {
                 request.addOption("--user-agent", NetworkConstants.USER_AGENT)
             }
@@ -99,7 +107,7 @@ class YtDlpParser(
                 webpageUrl = url
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w("YtDlpParser", "yt-dlp 解析失败", e)
             // 重新抛出异常，让上层捕获并显示
             throw e
         }

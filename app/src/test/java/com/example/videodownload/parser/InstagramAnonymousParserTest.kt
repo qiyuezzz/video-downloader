@@ -35,4 +35,24 @@ class InstagramAnonymousParserTest {
         assertEquals("https://media.example/video.mp4?a=1&b=2", metadata["og:video:secure_url"])
         assertEquals("1280", metadata["og:video:height"])
     }
+
+    @Test
+    fun `解析官方 embed 页双重转义的视频地址`() {
+        val media = InstagramAnonymousParser.parseEmbedVideo(
+            """{\"display_url\":\"https:\\\/\\\/cdn.example.com\\\/cover.jpg?x=1\u0026y=2\","video_url\":\"https:\\\/\\\/cdn.example.com\\\/video.mp4?x=1\u0026y=2\"}"""
+        )
+
+        assertEquals("https://cdn.example.com/video.mp4?x=1&y=2", media?.videoUrl)
+        assertEquals("https://cdn.example.com/cover.jpg?x=1&y=2", media?.thumbnailUrl)
+    }
+
+    @Test
+    fun `兼容未转义的 embed 视频 JSON`() {
+        val media = InstagramAnonymousParser.parseEmbedVideo(
+            """{"video_url":"https://cdn.example.com/video.mp4","display_url":"https://cdn.example.com/cover.jpg"}"""
+        )
+
+        assertEquals("https://cdn.example.com/video.mp4", media?.videoUrl)
+        assertEquals("https://cdn.example.com/cover.jpg", media?.thumbnailUrl)
+    }
 }

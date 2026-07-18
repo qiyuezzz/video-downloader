@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.videodownload.data.model.DownloadState
@@ -48,8 +49,8 @@ import com.example.videodownload.ui.theme.*
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
 ) {
-    val parseState by viewModel.parseState.collectAsState()
-    val downloadTasks by viewModel.downloadTasks.collectAsState()
+    val parseState by viewModel.parseState.collectAsStateWithLifecycle()
+    val downloadTasks by viewModel.downloadTasks.collectAsStateWithLifecycle()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var showBottomSheet by remember { mutableStateOf(false) }

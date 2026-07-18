@@ -30,6 +30,7 @@ class VideoDownloader(private val context: Context) {
             .build()
 
         private val ILLEGAL_CHAR_REGEX = Regex("[/\\\\:*?\"<>|]")
+        private const val MAX_FILE_NAME_LENGTH = 120
     }
 
     /**
@@ -47,8 +48,12 @@ class VideoDownloader(private val context: Context) {
         referer: String? = null,
         existingFileUri: Uri? = null,
         alreadyDownloadedBytes: Long = 0L,
+        expectedTotalBytes: Long = 0L,
     ): Flow<DownloadState> = flow {
         try {
+            if (!videoUrl.startsWith("https://", ignoreCase = true)) {
+                throw IOException("出于安全原因，仅支持 HTTPS 下载地址")
+            }
             val rootDir = DocumentFile.fromTreeUri(context, directoryUri)
                 ?: throw IOException("无法访问保存目录")
             val dir = platformFolder?.let { folderName ->
@@ -58,6 +63,11 @@ class VideoDownloader(private val context: Context) {
             } ?: rootDir
 
             val safeName = fileName.replace(ILLEGAL_CHAR_REGEX, "_")
+                .trim()
+                .trimEnd('.')
+                .take(MAX_FILE_NAME_LENGTH)
+                .ifEmpty { "video" }
+            val safeExt = ext.lowercase().filter(Char::isLetterOrDigit).ifEmpty { "mp4" }
 
             // 判断是续传还是新下载
             val file: DocumentFile
@@ -70,8 +80,8 @@ class VideoDownloader(private val context: Context) {
                 initialBytes = alreadyDownloadedBytes
             } else {
                 // 新下载模式：创建新文件
-                val mimeType = getMimeType(ext)
-                file = dir.createFile(mimeType, "$safeName.$ext")
+                val mimeType = getMimeType(safeExt)
+                file = dir.createFile(mimeType, "$safeName.$safeExt")
                     ?: throw IOException("无法创建文件")
                 initialBytes = 0L
             }
@@ -79,7 +89,14 @@ class VideoDownloader(private val context: Context) {
             val fileUriStr = file.uri.toString()
 
             // 立即发出首次进度（带文件 URI），让调用方能持久化文件位置
-            emit(DownloadState.Progress(if (initialBytes > 0) ((initialBytes * 100) / (initialBytes + 1)).toInt().coerceAtMost(99) else 0, fileUriStr))
+            val initialPercent = if (expectedTotalBytes > 0) {
+                DownloadProgress.percent(initialBytes, expectedTotalBytes)
+            } else if (initialBytes > 0) {
+                -1
+            } else {
+                0
+            }
+            emit(DownloadState.Progress(initialPercent, fileUriStr, initialBytes, expectedTotalBytes))
 
             val isBilibili = videoUrl.contains("bilivideo.com") || referer?.contains("bilibili.com") == true
             val userAgent = if (isBilibili) NetworkConstants.USER_AGENT_DESKTOP else NetworkConstants.USER_AGENT
@@ -101,17 +118,24 @@ class VideoDownloader(private val context: Context) {
 
             val response = sharedClient.newCall(requestBuilder.build()).execute()
 
+            if (response.code == 206 && initialBytes > 0) {
+                val contentRange = response.header("Content-Range")
+                if (contentRange?.startsWith("bytes $initialBytes-") != true) {
+                    response.close()
+                    throw IOException("服务器返回了无效的断点范围")
+                }
+            }
+
             if (!response.isSuccessful && response.code != 206) {
                 // 续传失败（服务器不支持 Range 或链接失效），从头开始
                 if (initialBytes > 0) {
-                    // 删除不完整的文件，重新创建
-                    file.delete()
-                    val mimeType = getMimeType(ext)
-                    val newFile = dir.createFile(mimeType, "$safeName.$ext")
+                    // 先验证全量请求可用，避免链接失效时误删已有断点文件。
+                    response.close()
+                    val mimeType = getMimeType(safeExt)
+                    val newFile = dir.createFile(mimeType, "$safeName.$safeExt")
                         ?: throw IOException("无法创建文件")
 
                     val newFileUriStr = newFile.uri.toString()
-                    emit(DownloadState.Progress(0, newFileUriStr))
 
                     // 重新发起不带 Range 的请求
                     val freshRequest = Request.Builder()
@@ -128,19 +152,37 @@ class VideoDownloader(private val context: Context) {
                     val freshResponse = sharedClient.newCall(freshRequest).execute()
                     if (!freshResponse.isSuccessful) {
                         newFile.delete()
+                        freshResponse.close()
                         throw IOException("下载失败: HTTP ${freshResponse.code}")
                     }
 
-                    downloadToFile(freshResponse, newFile, 0L, -1L, newFileUriStr) { emit(it) }
-                    emit(DownloadState.Success("$safeName.$ext", newFileUriStr))
+                    freshResponse.use { safeResponse ->
+                        try {
+                            validateContentType(safeResponse)
+                        } catch (e: IOException) {
+                            newFile.delete()
+                            throw e
+                        }
+                        file.delete()
+                        emit(DownloadState.Progress(0, newFileUriStr, 0, 0))
+                        val freshTotalBytes = safeResponse.body?.contentLength() ?: -1L
+                        downloadToFile(safeResponse, newFile, 0L, freshTotalBytes, newFileUriStr) { emit(it) }
+                    }
+                    emit(DownloadState.Success(newFile.name ?: "$safeName.$safeExt", newFileUriStr))
                     return@flow
                 } else {
                     file.delete()
+                    response.close()
                     throw IOException("下载失败: HTTP ${response.code}")
                 }
             }
 
-            val body = response.body ?: throw IOException("响应体为空")
+            validateContentType(response)
+
+            val body = response.body ?: run {
+                response.close()
+                throw IOException("响应体为空")
+            }
 
             // 计算总大小和起始偏移
             val contentLength = body.contentLength()
@@ -153,13 +195,19 @@ class VideoDownloader(private val context: Context) {
 
             if (totalBytes == 0L && initialBytes == 0L) {
                 file.delete()
+                response.close()
                 throw IOException("下载失败: 视频内容为空 (0 bytes)")
             }
 
             val startBytes = if (response.code == 206) initialBytes else 0L
-            downloadToFile(response, file, startBytes, totalBytes, fileUriStr) { emit(it) }
+            if (totalBytes <= 0) {
+                emit(DownloadState.Progress(-1, fileUriStr, startBytes, 0))
+            }
+            response.use { safeResponse ->
+                downloadToFile(safeResponse, file, startBytes, totalBytes, fileUriStr) { emit(it) }
+            }
 
-            emit(DownloadState.Success("$safeName.$ext", fileUriStr))
+            emit(DownloadState.Success(file.name ?: "$safeName.$safeExt", fileUriStr))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -199,13 +247,18 @@ class VideoDownloader(private val context: Context) {
                     downloadedBytes += bytesRead
 
                     if (totalBytes > 0) {
-                        val percent = ((downloadedBytes * 100) / totalBytes).toInt().coerceAtMost(100)
+                        val percent = DownloadProgress.percent(
+                            downloadedBytes,
+                            totalBytes,
+                            completed = downloadedBytes >= totalBytes,
+                        )
                         if (percent != lastReportedPercent) {
                             lastReportedPercent = percent
-                            emit(DownloadState.Progress(percent, fileUriStr))
+                            emit(DownloadState.Progress(percent, fileUriStr, downloadedBytes, totalBytes))
                         }
-                    } else if (downloadedBytes == startBytes) {
-                        emit(DownloadState.Progress(-1, fileUriStr))
+                    } else if (lastReportedPercent != -1) {
+                        lastReportedPercent = -1
+                        emit(DownloadState.Progress(-1, fileUriStr, downloadedBytes, 0))
                     }
                 }
                 os.flush()
@@ -224,5 +277,16 @@ class VideoDownloader(private val context: Context) {
                 "mkv" -> "video/x-matroska"
                 else -> "video/*"
             }
+    }
+
+    private fun validateContentType(response: okhttp3.Response) {
+        val contentType = response.body?.contentType()?.toString()?.lowercase().orEmpty()
+        if (contentType.startsWith("text/") ||
+            contentType.contains("json") ||
+            contentType.contains("xml")
+        ) {
+            response.close()
+            throw IOException("服务器返回的不是视频内容：$contentType")
+        }
     }
 }

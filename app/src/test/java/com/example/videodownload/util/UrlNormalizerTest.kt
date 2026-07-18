@@ -18,6 +18,19 @@ class UrlNormalizerTest {
     }
 
     @Test
+    fun `extract 截断无分隔符拼接的第二个链接`() {
+        val normalizer = UrlNormalizer()
+
+        assertEquals(
+            "https://x.com/i/status/2074058517439480151",
+            normalizer.extract(
+                "https://x.com/i/status/2074058517439480151" +
+                    "https://x.com/i/status/2074058517439480151"
+            ),
+        )
+    }
+
+    @Test
     fun normalize_removesTrackingParameters() = runBlocking {
         val normalizer = UrlNormalizer()
 

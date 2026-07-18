@@ -28,7 +28,13 @@ class B23ShortLinkResolver(
 class UrlNormalizer(
     private val shortLinkResolver: ShortLinkResolver = B23ShortLinkResolver(),
 ) {
-    fun extract(text: String): String? = URL_REGEX.find(text)?.value
+    fun extract(text: String): String? {
+        val candidate = URL_REGEX.find(text)?.value ?: return null
+        val nestedScheme = URL_SCHEME_REGEX.find(candidate, startIndex = HTTPS_PREFIX_LENGTH)
+        return candidate
+            .let { if (nestedScheme != null) it.substring(0, nestedScheme.range.first) else it }
+            .trimEnd('.', ',', '，', '。', ';', '；', ')', '）', ']', '】', '}')
+    }
 
     suspend fun normalize(url: String): String {
         var result = url.trim()
@@ -60,6 +66,8 @@ class UrlNormalizer(
 
     private companion object {
         val URL_REGEX = Regex("""https?://[\w\-_]+(\.[\w\-_]+)+[\w\-.,@?^=%&:/~+#]*""")
+        val URL_SCHEME_REGEX = Regex("""https?://""", RegexOption.IGNORE_CASE)
+        const val HTTPS_PREFIX_LENGTH = 8
         val BILIBILI_ID_REGEX = Regex(
             """bilibili\.com/(?:video/|bangumi/play/)(BV[\w]+|av\d+|ep\d+|ss\d+)""",
             RegexOption.IGNORE_CASE,

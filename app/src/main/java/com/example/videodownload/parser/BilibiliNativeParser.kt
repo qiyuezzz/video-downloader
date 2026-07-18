@@ -1,10 +1,12 @@
 package com.example.videodownload.parser
 
+import android.util.Log
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.util.NetworkClients
 import com.example.videodownload.util.NetworkConstants
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,7 +43,7 @@ class BilibiliNativeParser(
             
             val data = viewJson.getJSONObject("data")
             val title = data.getString("title")
-            val pic = data.getString("pic")
+            val pic = normalizeThumbnailUrl(data.optString("pic"))
             val cid = data.getLong("cid")
 
             // 2. 获取视频流地址 (使用 html5 平台接口，通常返回单链接 mp4)
@@ -104,8 +106,10 @@ class BilibiliNativeParser(
                 formats = formats,
                 webpageUrl = "https://www.bilibili.com/video/$bvid"
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w("BilibiliParser", "B站解析失败", e)
             null
         }
     }
@@ -114,5 +118,17 @@ class BilibiliNativeParser(
         val pattern = Pattern.compile("(BV[a-zA-Z0-9]+)")
         val matcher = pattern.matcher(url)
         return if (matcher.find()) matcher.group(1) else null
+    }
+
+    internal companion object {
+        /** B站接口仍可能返回 HTTP 或协议相对地址，统一升级为应用允许加载的 HTTPS。 */
+        fun normalizeThumbnailUrl(url: String): String? = when {
+            url.isBlank() -> null
+            url.startsWith("//") -> "https:$url"
+            url.startsWith("http://", ignoreCase = true) ->
+                "https://${url.substringAfter("://")}"
+            url.startsWith("https://", ignoreCase = true) -> url
+            else -> null
+        }
     }
 }

@@ -13,6 +13,7 @@ data class DownloadTask(
     val directoryUri: String = "",
     val fileUri: String = "",
     val totalBytes: Long = 0,
+    val workId: String = "",
 )
 
 /** 已完成下载的历史记录。 */
@@ -25,4 +26,6 @@ data class DownloadHistoryItem(
     val videoUrl: String,
     val webpageUrl: String,
     val timestamp: Long,
+    /** 扫描本地文件恢复历史时保存平台分类；旧记录为空时仍根据网页地址判断。 */
+    val platform: String = "",
 )
