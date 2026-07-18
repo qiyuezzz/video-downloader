@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +38,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.videodownload.data.model.DownloadState
-import com.example.videodownload.data.model.DownloadTask
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.ui.theme.*
@@ -48,9 +46,11 @@ import com.example.videodownload.ui.theme.*
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
+    onOpenDownloads: () -> Unit = {},
 ) {
     val parseState by viewModel.parseState.collectAsStateWithLifecycle()
     val downloadTasks by viewModel.downloadTasks.collectAsStateWithLifecycle()
+    val activeTasks = downloadTasks.filter { it.state !is DownloadState.Success }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var showBottomSheet by remember { mutableStateOf(false) }
@@ -111,16 +111,37 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(52.dp)
+                    .padding(end = 16.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                IconButton(onClick = onOpenDownloads) {
+                    BadgedBox(
+                        badge = {
+                            if (activeTasks.isNotEmpty()) {
+                                Badge { Text(activeTasks.size.toString()) }
+                            }
+                        },
+                    ) {
+                        Icon(
+                            Icons.Outlined.Download,
+                            contentDescription = "下载列表",
+                        )
+                    }
+                }
+            }
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { viewModel.pasteAndParse() },
                 shape = RoundedCornerShape(18.dp),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 8.dp,
-                    pressedElevation = 3.dp,
-                ),
                 icon = {
                     Icon(
                         Icons.Outlined.ContentPasteGo,
@@ -128,9 +149,7 @@ fun HomeScreen(
                         modifier = Modifier.size(20.dp),
                     )
                 },
-                text = {
-                    Text("粘贴解析", fontWeight = FontWeight.Bold)
-                },
+                text = { Text("粘贴解析", fontWeight = FontWeight.Bold) },
             )
         }
     ) { innerPadding ->
@@ -188,17 +207,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
             }
-
-            // 底部正在下载区域
-            val activeTasks = downloadTasks.filter { it.state !is DownloadState.Success }
-            if (activeTasks.isNotEmpty()) {
-                NovaActiveDownloadList(
-                    activeTasks = activeTasks,
-                    onResume = { viewModel.resumeDownload(it) },
-                    onRemove = { viewModel.removeIncompleteTask(it) },
-                    onResumeAll = { viewModel.resumeAllDownloads() }
-                )
-            }
         }
     }
 }
@@ -221,44 +229,12 @@ private fun NovaPasteSection(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(22.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Outlined.Link,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(21.dp),
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        "解析新视频",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "粘贴公开的视频页面链接",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
             OutlinedTextField(
                 value = manualUrl,
                 onValueChange = { manualUrl = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .heightIn(min = 56.dp),
                 placeholder = {
                     Text(
                         "输入或粘贴视频链接",
@@ -307,26 +283,6 @@ private fun NovaPasteSection(
                 Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
                 Spacer(modifier = Modifier.width(7.dp))
                 Text("开始解析", fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                listOf("X / Twitter", "B站", "YouTube").forEach { platform ->
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                    ) {
-                        Text(
-                            platform,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
             }
         }
     }
@@ -590,243 +546,6 @@ private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(if (copied) "已复制" else "复制")
-                }
-            }
-        }
-    }
-}
-
-// ============================================================
-// 活跃下载列表
-// ============================================================
-
-@Composable
-private fun NovaActiveDownloadList(
-    activeTasks: List<DownloadTask>,
-    onResume: (String) -> Unit,
-    onRemove: (String) -> Unit,
-    onResumeAll: () -> Unit,
-) {
-    val hasResumable = activeTasks.any {
-        it.state is DownloadState.Interrupted || it.state is DownloadState.Error
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.background,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        tonalElevation = 0.dp
-    ) {
-        Column {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "正在下载",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Badge(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ) {
-                    Text("${activeTasks.size}", fontWeight = FontWeight.Bold)
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                if (hasResumable) {
-                    TextButton(
-                        onClick = onResumeAll,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("全部继续", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-            }
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.padding(bottom = 20.dp)
-            ) {
-                items(activeTasks, key = { it.id }) { task ->
-                    DownloadTaskItem(
-                        task = task,
-                        onResume = { onResume(task.id) },
-                        onRemove = { onRemove(task.id) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ============================================================
-// 下载任务卡片
-// ============================================================
-
-@Composable
-fun DownloadTaskItem(
-    task: DownloadTask,
-    onResume: () -> Unit = {},
-    onRemove: () -> Unit = {},
-) {
-    val isInterrupted = task.state is DownloadState.Interrupted
-    val isError = task.state is DownloadState.Error
-
-    Surface(
-        modifier = Modifier.width(190.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column {
-            // 缩略图区域
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                if (task.thumbnailUrl != null) {
-                    AsyncImage(
-                        model = task.thumbnailUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                when (task.state) {
-                    is DownloadState.Progress -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.4f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (task.state.percent >= 0) {
-                                CircularProgressIndicator(
-                                    progress = { task.state.percent / 100f },
-                                    color = Color.White,
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-                        }
-                    }
-                    is DownloadState.Interrupted -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.5f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.PauseCircle,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-                    is DownloadState.Error -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.5f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                tint = NovaErrorDark.copy(alpha = 0.8f),
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-                    else -> {}
-                }
-            }
-            // 信息区域
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = task.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                when (val state = task.state) {
-                    is DownloadState.Idle -> Text(
-                        "排队中",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    is DownloadState.Progress -> {
-                        if (state.percent >= 0) {
-                            Text(
-                                "${state.percent}%",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        } else {
-                            Text(
-                                "下载中...",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    is DownloadState.Interrupted -> Text(
-                        "已暂停",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    is DownloadState.Error -> Text(
-                        "失败",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    else -> {}
-                }
-                if (isInterrupted || isError) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(
-                            onClick = onResume,
-                            modifier = Modifier.height(30.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("续传", style = MaterialTheme.typography.labelSmall)
-                        }
-                        OutlinedButton(
-                            onClick = onRemove,
-                            modifier = Modifier.height(30.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("移除", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
                 }
             }
         }

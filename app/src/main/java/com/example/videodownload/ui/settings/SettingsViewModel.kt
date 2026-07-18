@@ -64,6 +64,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val preferredQuality = settingsDataStore.preferredQuality
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsDataStore.QUALITY_BEST)
 
+    val themeMode = settingsDataStore.themeMode.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        SettingsDataStore.THEME_SYSTEM,
+    )
+
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState
 
@@ -184,6 +190,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             .distinct()
             .toList()
         return messages.joinToString("：").ifBlank { error.javaClass.simpleName }
+    }
+
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            settingsDataStore.setThemeMode(mode)
+        }
     }
 
     private companion object {

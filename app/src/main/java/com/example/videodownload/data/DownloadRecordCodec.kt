@@ -21,8 +21,11 @@ object DownloadRecordCodec {
                 put("ext", task.ext)
                 put("directoryUri", task.directoryUri)
                 put("fileUri", task.fileUri)
+                put("downloadedBytes", task.downloadedBytes)
                 put("totalBytes", task.totalBytes)
                 put("workId", task.workId)
+                put("startedAtMillis", task.startedAtMillis)
+                put("finishedAtMillis", task.finishedAtMillis)
             })
         }
         return array.toString()
@@ -40,8 +43,11 @@ object DownloadRecordCodec {
             ext = obj.optString("ext", "mp4"),
             directoryUri = obj.optString("directoryUri", ""),
             fileUri = obj.optString("fileUri", ""),
+            downloadedBytes = obj.optLong("downloadedBytes", 0),
             totalBytes = obj.optLong("totalBytes", 0),
             workId = obj.optString("workId", ""),
+            startedAtMillis = obj.optLong("startedAtMillis", 0),
+            finishedAtMillis = obj.optLong("finishedAtMillis", 0),
         )
     }
 

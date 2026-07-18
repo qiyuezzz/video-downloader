@@ -23,6 +23,7 @@ class SettingsDataStore(private val context: Context) {
         private val DOWNLOAD_HISTORY_KEY = stringPreferencesKey("download_history")
         private val ACTIVE_DOWNLOADS_KEY = stringPreferencesKey("active_downloads")
         private val HISTORY_LAYOUT_KEY = intPreferencesKey("history_layout")
+        private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
 
         const val QUALITY_BEST = "best"
         const val QUALITY_720P = "720p"
@@ -31,6 +32,10 @@ class SettingsDataStore(private val context: Context) {
         const val HISTORY_LAYOUT_LIST = 0
         const val HISTORY_LAYOUT_GRID = 1
         const val HISTORY_LAYOUT_COMPACT_GRID = 2
+
+        const val THEME_SYSTEM = "system"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
     }
 
     /** 保存目录的 URI 字符串 */
@@ -57,6 +62,13 @@ class SettingsDataStore(private val context: Context) {
     val historyLayout: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[HISTORY_LAYOUT_KEY]?.takeIf { it in HISTORY_LAYOUT_LIST..HISTORY_LAYOUT_COMPACT_GRID }
             ?: HISTORY_LAYOUT_LIST
+    }
+
+    /** 应用外观：跟随系统、浅色或深色。 */
+    val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[THEME_MODE_KEY]?.takeIf {
+            it == THEME_SYSTEM || it == THEME_LIGHT || it == THEME_DARK
+        } ?: THEME_SYSTEM
     }
 
     /** 更新历史记录 */
@@ -93,6 +105,14 @@ class SettingsDataStore(private val context: Context) {
                 HISTORY_LAYOUT_LIST,
                 HISTORY_LAYOUT_COMPACT_GRID,
             )
+        }
+    }
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { prefs ->
+            prefs[THEME_MODE_KEY] = mode.takeIf {
+                it == THEME_SYSTEM || it == THEME_LIGHT || it == THEME_DARK
+            } ?: THEME_SYSTEM
         }
     }
 }

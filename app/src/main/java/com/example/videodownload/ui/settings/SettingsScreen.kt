@@ -34,6 +34,12 @@ private val QUALITY_OPTIONS = listOf(
     SettingsDataStore.QUALITY_480P to "480p",
 )
 
+private val THEME_OPTIONS = listOf(
+    SettingsDataStore.THEME_SYSTEM to "跟随系统",
+    SettingsDataStore.THEME_LIGHT to "浅色模式",
+    SettingsDataStore.THEME_DARK to "深色模式",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -42,6 +48,7 @@ fun SettingsScreen(
     val saveLocation by viewModel.saveLocation.collectAsStateWithLifecycle()
     val saveLocationName by viewModel.saveLocationName.collectAsStateWithLifecycle()
     val preferredQuality by viewModel.preferredQuality.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val historyRestoreState by viewModel.historyRestoreState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -67,7 +74,7 @@ fun SettingsScreen(
                     Column {
                         Text("设置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text(
-                            "下载偏好与解析引擎",
+                            "外观、下载偏好与解析引擎",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -172,48 +179,25 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
+            // ---- 外观 ----
+            SettingsSectionHeader(title = "外观", icon = Icons.Outlined.Palette)
+            Spacer(modifier = Modifier.height(8.dp))
+            CompactOptionSelector(
+                options = THEME_OPTIONS,
+                selectedValue = themeMode,
+                onSelected = viewModel::setThemeMode,
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // ---- 画质偏好 ----
             SettingsSectionHeader(title = "默认画质", icon = Icons.Outlined.Tune)
             Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    QUALITY_OPTIONS.forEachIndexed { index, (value, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.setPreferredQuality(value) }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = preferredQuality == value,
-                                onClick = { viewModel.setPreferredQuality(value) },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = MaterialTheme.colorScheme.primary,
-                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (preferredQuality == value) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        }
-                        if (index < QUALITY_OPTIONS.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                }
-            }
+            CompactOptionSelector(
+                options = QUALITY_OPTIONS,
+                selectedValue = preferredQuality,
+                onSelected = viewModel::setPreferredQuality,
+            )
 
             Spacer(modifier = Modifier.height(28.dp))
 
@@ -359,6 +343,42 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactOptionSelector(
+    options: List<Pair<String, String>>,
+    selectedValue: String,
+    onSelected: (String) -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+        ) {
+            options.forEachIndexed { index, (value, label) ->
+                SegmentedButton(
+                    selected = selectedValue == value,
+                    onClick = { onSelected(value) },
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    modifier = Modifier.weight(1f),
+                    icon = {},
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }

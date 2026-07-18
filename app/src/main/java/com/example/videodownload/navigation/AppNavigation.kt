@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.videodownload.ui.home.DownloadHistoryScreen
+import com.example.videodownload.ui.home.DownloadTasksScreen
 import com.example.videodownload.ui.home.HomeScreen
 import com.example.videodownload.ui.home.HomeViewModel
 import com.example.videodownload.ui.home.VideoPlayerScreen
@@ -49,6 +50,7 @@ fun AppNavigation() {
     val bottomNavItems = listOf(Screen.Home, Screen.Downloads, Screen.Settings)
     var selectedRoute by rememberSaveable { mutableStateOf(Screen.Home.route) }
     var playerRequest by remember { mutableStateOf<PlayerRequest?>(null) }
+    var showDownloadTasks by rememberSaveable { mutableStateOf(false) }
     val stateHolder = rememberSaveableStateHolder()
 
     playerRequest?.let { request ->
@@ -57,6 +59,15 @@ fun AppNavigation() {
             uriString = request.uri,
             title = request.title,
             onNavigateBack = { playerRequest = null },
+        )
+        return
+    }
+
+    if (showDownloadTasks) {
+        BackHandler { showDownloadTasks = false }
+        DownloadTasksScreen(
+            viewModel = homeViewModel,
+            onNavigateBack = { showDownloadTasks = false },
         )
         return
     }
@@ -133,7 +144,10 @@ fun AppNavigation() {
                         onPlayVideo = { uri, title -> playerRequest = PlayerRequest(uri, title) },
                     )
                     Screen.Settings.route -> SettingsScreen()
-                    else -> HomeScreen(viewModel = homeViewModel)
+                    else -> HomeScreen(
+                        viewModel = homeViewModel,
+                        onOpenDownloads = { showDownloadTasks = true },
+                    )
                 }
             }
         }

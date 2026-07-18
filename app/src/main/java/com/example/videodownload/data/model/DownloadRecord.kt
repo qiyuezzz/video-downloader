@@ -12,8 +12,11 @@ data class DownloadTask(
     val ext: String = "mp4",
     val directoryUri: String = "",
     val fileUri: String = "",
+    val downloadedBytes: Long = 0,
     val totalBytes: Long = 0,
     val workId: String = "",
+    val startedAtMillis: Long = 0,
+    val finishedAtMillis: Long = 0,
 )
 
 /** 已完成下载的历史记录。 */

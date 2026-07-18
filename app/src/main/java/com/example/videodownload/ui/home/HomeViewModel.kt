@@ -98,7 +98,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val tasks = DownloadRecordCodec.decodeActiveTasks(json)
         if (tasks.isEmpty()) return
 
-        _downloadTasks.value = tasks.map { it.copy(state = DownloadState.Interrupted) }
+        _downloadTasks.value = tasks.map {
+            it.copy(
+                state = DownloadState.Interrupted,
+                finishedAtMillis = it.finishedAtMillis.takeIf { time -> time > 0 }
+                    ?: System.currentTimeMillis(),
+            )
+        }
         tasks.forEach { task ->
             if (task.workId.isNotEmpty()) {
                 observeWork(task.id, task.workId)
@@ -287,6 +293,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     ext = format.ext,
                     directoryUri = saveUri,
                     totalBytes = format.filesize ?: 0,
+                    startedAtMillis = System.currentTimeMillis(),
                 )
 
                 _downloadTasks.update { current -> listOf(newTask) + current }
@@ -303,6 +310,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             it.state is DownloadState.Interrupted || it.state is DownloadState.Error
         }
         tasksToResume.forEach { resumeDownload(it.id) }
+    }
+
+    /** 暂停所有排队中或正在进行的下载。 */
+    fun pauseAllDownloads() {
+        val taskIds = _downloadTasks.value
+            .filter { it.state is DownloadState.Idle || it.state is DownloadState.Progress }
+            .map(DownloadTask::id)
+        taskIds.forEach(::pauseDownload)
     }
 
     /**
@@ -343,12 +358,43 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     downloadedBytes = downloadedBytes,
                     totalBytes = task.totalBytes,
                 ),
+                downloadedBytes = downloadedBytes,
+                startedAtMillis = task.startedAtMillis.takeIf { it > 0 }
+                    ?: System.currentTimeMillis(),
+                finishedAtMillis = 0,
             )
             _downloadTasks.update { current ->
                 current.map { if (it.id == taskId) resumableTask else it }
             }
             enqueueDownload(resumableTask, downloadedBytes)
         }
+    }
+
+    /**
+     * 暂停排队中或正在进行的下载，并保留已写入文件供后续续传。
+     */
+    fun pauseDownload(taskId: String) {
+        val task = _downloadTasks.value.find { it.id == taskId } ?: return
+        if (task.state !is DownloadState.Idle && task.state !is DownloadState.Progress) return
+
+        task.workId.takeIf(String::isNotEmpty)
+            ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?.let(workManager::cancelWorkById)
+        workObservers.remove(taskId)?.cancel()
+
+        _downloadTasks.update { current ->
+            current.map {
+                if (it.id == taskId) {
+                    it.copy(
+                        state = DownloadState.Interrupted,
+                        finishedAtMillis = System.currentTimeMillis(),
+                    )
+                } else {
+                    it
+                }
+            }
+        }
+        viewModelScope.launch { saveActiveDownloads() }
     }
 
     fun setHistoryLayout(layout: Int) {
@@ -475,7 +521,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         totalBytes,
                     ),
                     fileUri = fileUri,
+                    downloadedBytes = downloadedBytes,
                     totalBytes = totalBytes,
+                    finishedAtMillis = 0,
                 )
             }
             WorkInfo.State.SUCCEEDED -> {
@@ -486,6 +534,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val finished = task.copy(
                     state = success,
                     fileUri = success.fileUri ?: task.fileUri,
+                    downloadedBytes = task.totalBytes,
+                    finishedAtMillis = System.currentTimeMillis(),
                 )
                 if (task.state !is DownloadState.Success) addToHistory(finished, success)
                 finished
@@ -493,9 +543,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             WorkInfo.State.FAILED -> task.copy(
                 state = DownloadState.Error(
                     info.outputData.getString(VideoDownloadWorker.KEY_ERROR) ?: "下载失败"
-                )
+                ),
+                finishedAtMillis = System.currentTimeMillis(),
             )
-            WorkInfo.State.CANCELLED -> task.copy(state = DownloadState.Interrupted)
+            WorkInfo.State.CANCELLED -> task.copy(
+                state = DownloadState.Interrupted,
+                finishedAtMillis = System.currentTimeMillis(),
+            )
         }
         _downloadTasks.update { current -> current.map { if (it.id == taskId) updated else it } }
         saveActiveDownloads()
