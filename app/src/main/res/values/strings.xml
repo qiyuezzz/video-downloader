@@ -124,8 +124,6 @@
     <string name="error_directory_unavailable">所选目录不可用</string>
     <string name="preview_server_denied">服务器拒绝访问（403）</string>
     <string name="preview_parse_failed">视频解析失败（请尝试刷新或重新解析）</string>
-    <string name="preview_playback_error">播放错误：%1$s</string>
-    <string name="preview_failed">播放预览失败：%1$s</string>
     <string name="preview_playback_error_prefix">播放错误：</string>
     <string name="preview_failed_prefix">播放预览失败：</string>
     <string name="error_download_input_incomplete">下载参数不完整</string>

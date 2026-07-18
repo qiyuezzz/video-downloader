@@ -607,10 +607,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _clipboardUrl.value = null
     }
 
-    fun removeDownloadTask(taskId: String) {
-        removeIncompleteTask(taskId)
-    }
-
     companion object {
         private const val TAG = "HomeViewModel"
         private const val WORK_STATUS_POLL_INTERVAL_MS = 500L

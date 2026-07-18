@@ -1,7 +1,6 @@
 package com.example.videodownload.ui.home
 
 import android.content.Context
-import android.content.Intent
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.compose.foundation.border
@@ -137,24 +136,5 @@ fun checkFileAndRun(context: Context, uriString: String, action: () -> Unit) {
             context.getString(R.string.history_operation_failed, e.message.orEmpty()),
             Toast.LENGTH_SHORT,
         ).show()
-    }
-}
-
-/**
- * 通用的打开视频逻辑（带兼容性优化）
- */
-fun openVideo(context: Context, uriString: String) {
-    checkFileAndRun(context, uriString) {
-        val uri = uriString.toUri()
-        val mimeType = context.contentResolver.getType(uri) ?: "video/*"
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mimeType)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        val chooser = Intent.createChooser(intent, context.getString(R.string.history_choose_player))
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
     }
 }

@@ -19,9 +19,6 @@ object YtDlpEngine {
     @Volatile
     private var initialized = false
 
-    @Volatile
-    private var lastInitializationError: Throwable? = null
-
     suspend fun ensureInitialized(context: Context) {
         if (initialized) return
 
@@ -38,7 +35,6 @@ object YtDlpEngine {
                     try {
                         initialize(appContext)
                     } catch (retryError: Throwable) {
-                        lastInitializationError = retryError
                         throw IllegalStateException(
                             appContext.getString(R.string.error_ytdlp_init, rootMessage(retryError)),
                             retryError,
@@ -49,12 +45,9 @@ object YtDlpEngine {
         }
     }
 
-    fun lastErrorMessage(): String? = lastInitializationError?.let(::rootMessage)
-
     private fun initialize(context: Context) {
         YoutubeDL.getInstance().init(context)
         initialized = true
-        lastInitializationError = null
     }
 
     private fun rootMessage(error: Throwable): String {
