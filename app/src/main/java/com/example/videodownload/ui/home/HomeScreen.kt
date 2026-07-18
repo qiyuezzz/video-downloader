@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.videodownload.data.model.DownloadState
+import com.example.videodownload.R
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.ui.theme.*
@@ -84,8 +86,8 @@ fun HomeScreen(
 
     if (duplicateConfirmEvent != null) {
         NovaDeleteDialog(
-            title = "重复下载提示",
-            content = "检测到您已经下载过该视频，是否仍要重复下载？",
+            title = stringResource(R.string.home_duplicate_title),
+            content = stringResource(R.string.home_duplicate_message),
             onDismiss = { duplicateConfirmEvent = null },
             onConfirm = {
                 duplicateConfirmEvent?.let { event ->
@@ -130,7 +132,7 @@ fun HomeScreen(
                     ) {
                         Icon(
                             Icons.Outlined.Download,
-                            contentDescription = "下载列表",
+                            contentDescription = stringResource(R.string.home_download_list),
                         )
                     }
                 }
@@ -149,7 +151,7 @@ fun HomeScreen(
                         modifier = Modifier.size(20.dp),
                     )
                 },
-                text = { Text("粘贴解析", fontWeight = FontWeight.Bold) },
+                text = { Text(stringResource(R.string.home_paste_parse), fontWeight = FontWeight.Bold) },
             )
         }
     ) { innerPadding ->
@@ -237,7 +239,7 @@ private fun NovaPasteSection(
                     .heightIn(min = 56.dp),
                 placeholder = {
                     Text(
-                        "输入或粘贴视频链接",
+                        stringResource(R.string.home_url_hint),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 },
@@ -282,7 +284,7 @@ private fun NovaPasteSection(
             ) {
                 Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
                 Spacer(modifier = Modifier.width(7.dp))
-                Text("开始解析", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.home_start_parse), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -300,12 +302,12 @@ private fun NovaIdleHint() {
             .padding(top = 6.dp),
     ) {
         Text(
-            "简单三步，离线观看",
+            stringResource(R.string.home_idle_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
         )
         Text(
-            "链接解析、画质选择和下载状态都集中在一个页面。",
+            stringResource(R.string.home_idle_description),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -317,15 +319,15 @@ private fun NovaIdleHint() {
             HomeFeatureCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.Bolt,
-                title = "快速解析",
-                description = "自动匹配站点",
+                title = stringResource(R.string.home_quick_parse),
+                description = stringResource(R.string.home_auto_match_site),
                 color = MaterialTheme.colorScheme.primary,
             )
             HomeFeatureCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Outlined.HighQuality,
-                title = "自由选画质",
-                description = "下载前可预览",
+                title = stringResource(R.string.home_choose_quality),
+                description = stringResource(R.string.home_preview_before_download),
                 color = MaterialTheme.colorScheme.tertiary,
             )
         }
@@ -385,7 +387,7 @@ private fun NovaLoadingIndicator() {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "正在解析...",
+            stringResource(R.string.home_parsing),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -442,7 +444,7 @@ private fun NovaResultCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
                     ) {
                         Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(5.dp))
-                        Text("解析完成", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.home_parse_complete), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -460,14 +462,14 @@ private fun NovaResultCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(5.dp))
                     Text(
-                        "发现 ${videoInfo.formats.size} 个可下载画质",
+                        stringResource(R.string.home_formats_found, videoInfo.formats.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 FilledIconButton(onClick = onShowOptions) {
-                    Icon(Icons.Filled.Download, contentDescription = "选择画质")
+                    Icon(Icons.Filled.Download, contentDescription = stringResource(R.string.home_select_quality))
                 }
             }
         }
@@ -510,7 +512,7 @@ private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "解析失败",
+                text = stringResource(R.string.home_parse_failed),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.error
@@ -530,7 +532,7 @@ private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
                 ) {
                     Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("重试")
+                    Text(stringResource(R.string.common_retry))
                 }
                 OutlinedButton(
                     onClick = {
@@ -545,7 +547,7 @@ private fun NovaErrorCard(message: String, onRetry: () -> Unit) {
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (copied) "已复制" else "复制")
+                    Text(if (copied) stringResource(R.string.common_copied) else stringResource(R.string.common_copy))
                 }
             }
         }
@@ -580,7 +582,7 @@ fun DownloadBottomSheet(
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "选择下载内容",
+                text = stringResource(R.string.home_choose_download),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -607,13 +609,13 @@ fun DownloadBottomSheet(
                     onClick = { previewUrl = null },
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
-                    Text("关闭预览")
+                    Text(stringResource(R.string.home_close_preview))
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
             Text(
-                "选择画质",
+                stringResource(R.string.home_select_quality),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
@@ -714,7 +716,11 @@ fun DownloadBottomSheet(
                 Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    if (selectedFormats.isNotEmpty()) "下载 ${selectedFormats.size} 个视频" else "请选择视频",
+                    if (selectedFormats.isNotEmpty()) {
+                        stringResource(R.string.home_download_count, selectedFormats.size)
+                    } else {
+                        stringResource(R.string.home_select_video)
+                    },
                     fontWeight = FontWeight.Bold
                 )
             }

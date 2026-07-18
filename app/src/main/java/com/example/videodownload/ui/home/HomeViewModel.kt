@@ -14,6 +14,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.videodownload.data.DownloadRecordCodec
+import com.example.videodownload.R
 import com.example.videodownload.data.SettingsDataStore
 import com.example.videodownload.data.model.DownloadHistoryItem
 import com.example.videodownload.data.model.DownloadState
@@ -50,7 +51,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         specializedParsers = listOf(
             TwitterApiParser(),
             BilibiliNativeParser(),
-            InstagramAnonymousParser(),
+            InstagramAnonymousParser(context = application),
         ),
         fallbackParser = YtDlpParser(application),
     )
@@ -211,7 +212,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun parseUrl(rawInput: String) {
         val rawUrl = urlNormalizer.extract(rawInput)
         if (rawUrl == null) {
-            _parseState.value = ParseState.Error("未能从输入中识别到有效的链接")
+            _parseState.value = ParseState.Error(getApplication<Application>().getString(R.string.error_invalid_url))
             return
         }
 
@@ -225,21 +226,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     _parseState.value = ParseState.Success(videoInfo)
                     _uiEvent.emit(HomeEvent.ShowDownloadOptions)
                 } else {
-                    _parseState.value = ParseState.Error("解析失败，未找到可用的视频格式")
+                    _parseState.value = ParseState.Error(getApplication<Application>().getString(R.string.error_no_formats))
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 val message = e.message ?: ""
                 val friendlyMessage = when {
-                    message.contains("412") -> "B站解析受限 (412)，请尝试重试或切换网络"
-                    message.contains("403") -> "访问被拒绝 (403)，请检查链接或稍后再试"
-                    message.contains("Incomplete YouTube ID") -> "链接格式不正确"
+                    message.contains("412") -> getApplication<Application>().getString(R.string.error_bilibili_412)
+                    message.contains("403") -> getApplication<Application>().getString(R.string.error_access_403)
+                    message.contains("Incomplete YouTube ID") -> getApplication<Application>().getString(R.string.error_invalid_link)
                     message.contains("No video could be found in this tweet", ignoreCase = true) ->
-                        "该推文未返回可下载视频，可能是引用推文、受限内容或链接已失效"
+                        getApplication<Application>().getString(R.string.error_twitter_no_video)
                     message.contains("Instagram sent an empty media response", ignoreCase = true) ->
-                        "Instagram 未返回公开视频，请确认该内容无需登录即可访问"
-                    else -> "解析出错: ${e.message ?: "未知错误"}"
+                        getApplication<Application>().getString(R.string.error_instagram_no_video)
+                    else -> getApplication<Application>().getString(
+                        R.string.error_parse,
+                        e.message ?: getApplication<Application>().getString(R.string.error_unknown),
+                    )
                 }
                 _parseState.value = ParseState.Error(friendlyMessage)
             }
@@ -273,7 +277,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val saveUri = settingsDataStore.saveLocation.first()
             if (saveUri == null) {
-                _parseState.value = ParseState.Error("请先在设置中选择保存目录")
+                _parseState.value = ParseState.Error(getApplication<Application>().getString(R.string.error_choose_directory_first))
                 return@launch
             }
 
@@ -428,7 +432,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: IllegalStateException) {
             _downloadTasks.update { current ->
                 current.map {
-                    if (it.id == task.id) it.copy(state = DownloadState.Error("下载参数过大，无法创建后台任务"))
+                    if (it.id == task.id) it.copy(
+                        state = DownloadState.Error(
+                            getApplication<Application>().getString(R.string.error_download_input_too_large)
+                        )
+                    )
                     else it
                 }
             }
@@ -446,7 +454,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: IllegalStateException) {
             _downloadTasks.update { current ->
                 current.map {
-                    if (it.id == task.id) it.copy(state = DownloadState.Error("无法提交后台下载任务"))
+                    if (it.id == task.id) it.copy(
+                        state = DownloadState.Error(
+                            getApplication<Application>().getString(R.string.error_submit_download)
+                        )
+                    )
                     else it
                 }
             }
@@ -481,7 +493,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "读取后台下载状态失败", e)
                 _downloadTasks.update { current ->
                     current.map {
-                        if (it.id == taskId) it.copy(state = DownloadState.Error("无法读取后台下载状态"))
+                        if (it.id == taskId) it.copy(
+                            state = DownloadState.Error(
+                                getApplication<Application>().getString(R.string.error_read_download_status)
+                            )
+                        )
                         else it
                     }
                 }
@@ -542,7 +558,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             WorkInfo.State.FAILED -> task.copy(
                 state = DownloadState.Error(
-                    info.outputData.getString(VideoDownloadWorker.KEY_ERROR) ?: "下载失败"
+                    info.outputData.getString(VideoDownloadWorker.KEY_ERROR)
+                        ?: getApplication<Application>().getString(R.string.error_download_failed)
                 ),
                 finishedAtMillis = System.currentTimeMillis(),
             )

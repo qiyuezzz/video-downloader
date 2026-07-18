@@ -50,12 +50,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.videodownload.data.model.DownloadState
+import com.example.videodownload.R
 import com.example.videodownload.data.model.DownloadTask
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -89,7 +91,11 @@ fun DownloadTasksScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (selectionMode) "已选择 ${selectedIds.size} 项" else "下载列表",
+                        if (selectionMode) {
+                            stringResource(R.string.common_selected_count, selectedIds.size)
+                        } else {
+                            stringResource(R.string.tasks_title)
+                        },
                         fontWeight = FontWeight.Bold,
                     )
                 },
@@ -102,7 +108,11 @@ fun DownloadTasksScreen(
                         Icon(
                             if (selectionMode) Icons.Outlined.Close
                             else Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = if (selectionMode) "取消选择" else "返回",
+                            contentDescription = if (selectionMode) {
+                                stringResource(R.string.tasks_cancel_selection)
+                            } else {
+                                stringResource(R.string.common_back)
+                            },
                         )
                     }
                 },
@@ -114,13 +124,13 @@ fun DownloadTasksScreen(
                                 selectedIds = emptySet()
                             },
                         ) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "删除所选任务")
+                            Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.tasks_delete_selected))
                         }
                     } else if (hasPausableTasks) {
                         IconButton(onClick = viewModel::pauseAllDownloads) {
                             Icon(
                                 Icons.Outlined.PauseCircleOutline,
-                                contentDescription = "全部暂停",
+                                contentDescription = stringResource(R.string.tasks_pause_all),
                             )
                         }
                     }
@@ -128,7 +138,7 @@ fun DownloadTasksScreen(
                         IconButton(onClick = viewModel::resumeAllDownloads) {
                             Icon(
                                 Icons.Outlined.PlayCircleOutline,
-                                contentDescription = "全部继续",
+                                contentDescription = stringResource(R.string.tasks_resume_all),
                             )
                         }
                     }
@@ -151,7 +161,7 @@ fun DownloadTasksScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("暂无下载任务", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.tasks_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -274,7 +284,7 @@ private fun DownloadDetailsCard(
                 if (selected) {
                     Icon(
                         Icons.Outlined.CheckCircle,
-                        contentDescription = "已选择",
+                        contentDescription = stringResource(R.string.tasks_selected),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .padding(9.dp)
@@ -287,7 +297,11 @@ private fun DownloadDetailsCard(
                         Icon(
                             if (pausable) Icons.Outlined.PauseCircleOutline
                             else Icons.Outlined.PlayCircleOutline,
-                            contentDescription = if (pausable) "暂停" else "继续下载",
+                            contentDescription = if (pausable) {
+                                stringResource(R.string.tasks_pause)
+                            } else {
+                                stringResource(R.string.tasks_resume)
+                            },
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(30.dp),
                         )
@@ -307,13 +321,20 @@ private fun DownloadDetailsCard(
             Spacer(modifier = Modifier.height(9.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    "大小  ${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}",
+                    stringResource(
+                        R.string.tasks_size,
+                        formatBytes(downloadedBytes),
+                        formatBytes(totalBytes),
+                    ),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    "时长  ${formatElapsed(task.startedAtMillis, task.finishedAtMillis, now)}",
+                    stringResource(
+                        R.string.tasks_duration,
+                        formatElapsed(task.startedAtMillis, task.finishedAtMillis, now),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -323,12 +344,17 @@ private fun DownloadDetailsCard(
     }
 }
 
+@Composable
 private fun downloadStatusText(state: DownloadState, percent: Int): String = when (state) {
-    DownloadState.Idle -> "等待下载"
-    is DownloadState.Progress -> if (percent >= 0) "下载中  $percent%" else "正在下载"
-    is DownloadState.Success -> "下载完成"
-    is DownloadState.Error -> "下载失败"
-    DownloadState.Interrupted -> "已暂停"
+    DownloadState.Idle -> stringResource(R.string.tasks_waiting)
+    is DownloadState.Progress -> if (percent >= 0) {
+        stringResource(R.string.tasks_downloading_percent, percent)
+    } else {
+        stringResource(R.string.tasks_downloading)
+    }
+    is DownloadState.Success -> stringResource(R.string.tasks_complete)
+    is DownloadState.Error -> stringResource(R.string.tasks_failed)
+    DownloadState.Interrupted -> stringResource(R.string.tasks_paused)
 }
 
 private fun formatBytes(bytes: Long): String {

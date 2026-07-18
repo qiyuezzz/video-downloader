@@ -25,7 +25,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         androidResources {
-            localeFilters += listOf("zh")
+            localeFilters += listOf("zh", "en")
         }
         ndk {
             abiFilters.add("arm64-v8a")

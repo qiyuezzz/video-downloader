@@ -5,6 +5,7 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
 import com.example.videodownload.data.model.DownloadState
+import com.example.videodownload.R
 import com.example.videodownload.util.NetworkConstants
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -52,14 +53,14 @@ class VideoDownloader(private val context: Context) {
     ): Flow<DownloadState> = flow {
         try {
             if (!videoUrl.startsWith("https://", ignoreCase = true)) {
-                throw IOException("出于安全原因，仅支持 HTTPS 下载地址")
+                throw IOException(context.getString(R.string.error_https_only))
             }
             val rootDir = DocumentFile.fromTreeUri(context, directoryUri)
-                ?: throw IOException("无法访问保存目录")
+                ?: throw IOException(context.getString(R.string.error_save_directory_access))
             val dir = platformFolder?.let { folderName ->
                 rootDir.findFile(folderName)?.takeIf { it.isDirectory }
                     ?: rootDir.createDirectory(folderName)
-                    ?: throw IOException("无法创建平台目录：$folderName")
+                    ?: throw IOException(context.getString(R.string.error_create_platform_directory, folderName))
             } ?: rootDir
 
             val safeName = fileName.replace(ILLEGAL_CHAR_REGEX, "_")
@@ -76,13 +77,13 @@ class VideoDownloader(private val context: Context) {
             if (existingFileUri != null && alreadyDownloadedBytes > 0) {
                 // 续传模式：使用已有文件
                 file = DocumentFile.fromSingleUri(context, existingFileUri)
-                    ?: throw IOException("无法访问已有文件")
+                    ?: throw IOException(context.getString(R.string.error_existing_file_access))
                 initialBytes = alreadyDownloadedBytes
             } else {
                 // 新下载模式：创建新文件
                 val mimeType = getMimeType(safeExt)
                 file = dir.createFile(mimeType, "$safeName.$safeExt")
-                    ?: throw IOException("无法创建文件")
+                    ?: throw IOException(context.getString(R.string.error_create_file))
                 initialBytes = 0L
             }
 
@@ -122,7 +123,7 @@ class VideoDownloader(private val context: Context) {
                 val contentRange = response.header("Content-Range")
                 if (contentRange?.startsWith("bytes $initialBytes-") != true) {
                     response.close()
-                    throw IOException("服务器返回了无效的断点范围")
+                    throw IOException(context.getString(R.string.error_invalid_range))
                 }
             }
 
@@ -133,7 +134,7 @@ class VideoDownloader(private val context: Context) {
                     response.close()
                     val mimeType = getMimeType(safeExt)
                     val newFile = dir.createFile(mimeType, "$safeName.$safeExt")
-                        ?: throw IOException("无法创建文件")
+                        ?: throw IOException(context.getString(R.string.error_create_file))
 
                     val newFileUriStr = newFile.uri.toString()
 
@@ -153,7 +154,7 @@ class VideoDownloader(private val context: Context) {
                     if (!freshResponse.isSuccessful) {
                         newFile.delete()
                         freshResponse.close()
-                        throw IOException("下载失败: HTTP ${freshResponse.code}")
+                        throw IOException(context.getString(R.string.error_download_http, freshResponse.code))
                     }
 
                     freshResponse.use { safeResponse ->
@@ -173,7 +174,7 @@ class VideoDownloader(private val context: Context) {
                 } else {
                     file.delete()
                     response.close()
-                    throw IOException("下载失败: HTTP ${response.code}")
+                    throw IOException(context.getString(R.string.error_download_http, response.code))
                 }
             }
 
@@ -181,7 +182,7 @@ class VideoDownloader(private val context: Context) {
 
             val body = response.body ?: run {
                 response.close()
-                throw IOException("响应体为空")
+                throw IOException(context.getString(R.string.error_empty_response))
             }
 
             // 计算总大小和起始偏移
@@ -196,7 +197,7 @@ class VideoDownloader(private val context: Context) {
             if (totalBytes == 0L && initialBytes == 0L) {
                 file.delete()
                 response.close()
-                throw IOException("下载失败: 视频内容为空 (0 bytes)")
+                throw IOException(context.getString(R.string.error_empty_video))
             }
 
             val startBytes = if (response.code == 206) initialBytes else 0L
@@ -211,7 +212,7 @@ class VideoDownloader(private val context: Context) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            emit(DownloadState.Error(e.message ?: "下载失败"))
+            emit(DownloadState.Error(e.message ?: context.getString(R.string.error_download_failed)))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -226,7 +227,7 @@ class VideoDownloader(private val context: Context) {
         fileUriStr: String,
         emit: suspend (DownloadState) -> Unit,
     ) {
-        val body = response.body ?: throw IOException("响应体为空")
+        val body = response.body ?: throw IOException(context.getString(R.string.error_empty_response))
         var downloadedBytes = startBytes
 
         // 续传时使用追加模式 "wa"，新下载使用默认模式
@@ -234,7 +235,7 @@ class VideoDownloader(private val context: Context) {
             context.contentResolver.openOutputStream(file.uri, "wa")
         } else {
             context.contentResolver.openOutputStream(file.uri)
-        } ?: throw IOException("无法打开输出流")
+        } ?: throw IOException(context.getString(R.string.error_open_output))
 
         outputStream.use { os ->
             body.byteStream().use { inputStream ->
@@ -267,7 +268,7 @@ class VideoDownloader(private val context: Context) {
 
         if (downloadedBytes == 0L && startBytes == 0L) {
             file.delete()
-            throw IOException("下载失败: 写入数据为 0")
+            throw IOException(context.getString(R.string.error_zero_written))
         }
     }
 
@@ -286,7 +287,7 @@ class VideoDownloader(private val context: Context) {
             contentType.contains("xml")
         ) {
             response.close()
-            throw IOException("服务器返回的不是视频内容：$contentType")
+            throw IOException(context.getString(R.string.error_not_video_content, contentType))
         }
     }
 }

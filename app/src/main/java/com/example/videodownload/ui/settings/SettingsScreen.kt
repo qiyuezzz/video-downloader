@@ -1,6 +1,9 @@
 package com.example.videodownload.ui.settings
 
 import android.content.Intent
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,23 +24,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.videodownload.data.SettingsDataStore
+import com.example.videodownload.R
+import com.example.videodownload.util.AppLanguage
 
 private val QUALITY_OPTIONS = listOf(
-    SettingsDataStore.QUALITY_BEST to "最高画质",
-    SettingsDataStore.QUALITY_720P to "720p",
-    SettingsDataStore.QUALITY_480P to "480p",
+    SettingsDataStore.QUALITY_BEST to R.string.settings_quality_best,
+    SettingsDataStore.QUALITY_720P to null,
+    SettingsDataStore.QUALITY_480P to null,
 )
 
 private val THEME_OPTIONS = listOf(
-    SettingsDataStore.THEME_SYSTEM to "跟随系统",
-    SettingsDataStore.THEME_LIGHT to "浅色模式",
-    SettingsDataStore.THEME_DARK to "深色模式",
+    SettingsDataStore.THEME_SYSTEM to R.string.settings_theme_system,
+    SettingsDataStore.THEME_LIGHT to R.string.settings_theme_light,
+    SettingsDataStore.THEME_DARK to R.string.settings_theme_dark,
+)
+
+private val LANGUAGE_OPTIONS = listOf(
+    AppLanguage.CHINESE to R.string.settings_language_chinese,
+    AppLanguage.ENGLISH to R.string.settings_language_english,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +63,7 @@ fun SettingsScreen(
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val historyRestoreState by viewModel.historyRestoreState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val selectedLanguage = AppLanguage.selectedLanguage(context) ?: AppLanguage.CHINESE
 
     val directoryPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
@@ -72,9 +84,9 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("设置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text(
-                            "外观、下载偏好与解析引擎",
+                            stringResource(R.string.settings_subtitle),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -99,7 +111,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // ---- 保存位置 ----
-            SettingsSectionHeader(title = "保存位置", icon = Icons.Outlined.Folder)
+            SettingsSectionHeader(title = stringResource(R.string.settings_save_location), icon = Icons.Outlined.Folder)
             Spacer(modifier = Modifier.height(8.dp))
 
             Surface(
@@ -132,9 +144,9 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = saveLocationName ?: if (saveLocation == null) {
-                                "点击选择保存目录"
+                                stringResource(R.string.settings_choose_directory)
                             } else {
-                                "已选择保存目录"
+                                stringResource(R.string.settings_directory_selected)
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
@@ -142,7 +154,7 @@ fun SettingsScreen(
                         if (saveLocation == null) {
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "尚未设置保存位置",
+                                text = stringResource(R.string.settings_directory_missing),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -150,14 +162,14 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = when (val state = historyRestoreState) {
-                                    HistoryRestoreState.Idle -> "按平台建立子目录 · 点击更换"
-                                    HistoryRestoreState.Scanning -> "正在扫描已有视频…"
+                                    HistoryRestoreState.Idle -> stringResource(R.string.settings_directory_idle)
+                                    HistoryRestoreState.Scanning -> stringResource(R.string.settings_directory_scanning)
                                     is HistoryRestoreState.Success -> if (state.restoredCount > 0) {
-                                        "已添加 ${state.restoredCount} 个视频到本地视频"
+                                        stringResource(R.string.settings_directory_restored, state.restoredCount)
                                     } else {
-                                        "扫描完成，没有需要恢复的新视频"
+                                        stringResource(R.string.settings_directory_no_new)
                                     }
-                                    is HistoryRestoreState.Error -> "扫描失败：${state.message}"
+                                    is HistoryRestoreState.Error -> stringResource(R.string.settings_directory_scan_failed, state.message)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (historyRestoreState is HistoryRestoreState.Error) {
@@ -180,7 +192,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(28.dp))
 
             // ---- 外观 ----
-            SettingsSectionHeader(title = "外观", icon = Icons.Outlined.Palette)
+            SettingsSectionHeader(title = stringResource(R.string.settings_appearance), icon = Icons.Outlined.Palette)
             Spacer(modifier = Modifier.height(8.dp))
             CompactOptionSelector(
                 options = THEME_OPTIONS,
@@ -190,8 +202,23 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            SettingsSectionHeader(title = stringResource(R.string.settings_language), icon = Icons.Outlined.Language)
+            Spacer(modifier = Modifier.height(8.dp))
+            CompactOptionSelector(
+                options = LANGUAGE_OPTIONS,
+                selectedValue = selectedLanguage,
+                onSelected = { language ->
+                    if (language != selectedLanguage) {
+                        AppLanguage.setLanguage(context, language)
+                        context.findActivity()?.recreate()
+                    }
+                },
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // ---- 画质偏好 ----
-            SettingsSectionHeader(title = "默认画质", icon = Icons.Outlined.Tune)
+            SettingsSectionHeader(title = stringResource(R.string.settings_quality), icon = Icons.Outlined.Tune)
             Spacer(modifier = Modifier.height(8.dp))
             CompactOptionSelector(
                 options = QUALITY_OPTIONS,
@@ -202,7 +229,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(28.dp))
 
             // ---- yt-dlp 引擎 ----
-            SettingsSectionHeader(title = "yt-dlp 解析引擎", icon = Icons.Outlined.Build)
+            SettingsSectionHeader(title = stringResource(R.string.settings_parser_engine), icon = Icons.Outlined.Build)
             Spacer(modifier = Modifier.height(8.dp))
 
             Surface(
@@ -215,7 +242,7 @@ fun SettingsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "Bilibili、X/Twitter 和 Instagram 优先使用各自的专用解析器；其他平台或专用解析失败时，再由 yt-dlp 兼容解析。如遇到通用解析失败，可尝试更新 yt-dlp。",
+                        text = stringResource(R.string.settings_parser_description),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -236,7 +263,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("检查并更新", fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.settings_check_update), fontWeight = FontWeight.SemiBold)
                             }
                         }
                         is UpdateState.Updating -> {
@@ -257,7 +284,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        "正在更新...",
+                                        stringResource(R.string.settings_updating),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.primary
@@ -299,7 +326,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("再次更新")
+                                Text(stringResource(R.string.settings_update_again))
                             }
                         }
                         is UpdateState.Error -> {
@@ -313,7 +340,7 @@ fun SettingsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(
-                                        text = "更新失败",
+                                        text = stringResource(R.string.settings_update_failed),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.error,
                                         fontWeight = FontWeight.SemiBold
@@ -335,7 +362,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("重试更新", fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.settings_retry_update), fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -350,7 +377,7 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactOptionSelector(
-    options: List<Pair<String, String>>,
+    options: List<Pair<String, Int?>>,
     selectedValue: String,
     onSelected: (String) -> Unit,
 ) {
@@ -364,7 +391,7 @@ private fun CompactOptionSelector(
                 .fillMaxWidth()
                 .padding(8.dp),
         ) {
-            options.forEachIndexed { index, (value, label) ->
+            options.forEachIndexed { index, (value, labelRes) ->
                 SegmentedButton(
                     selected = selectedValue == value,
                     onClick = { onSelected(value) },
@@ -373,7 +400,7 @@ private fun CompactOptionSelector(
                     icon = {},
                 ) {
                     Text(
-                        label,
+                        labelRes?.let { stringResource(it) } ?: value,
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                     )
@@ -381,6 +408,12 @@ private fun CompactOptionSelector(
             }
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable

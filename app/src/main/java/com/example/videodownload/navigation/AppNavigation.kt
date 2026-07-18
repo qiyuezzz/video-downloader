@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -30,16 +32,17 @@ import com.example.videodownload.ui.home.HomeScreen
 import com.example.videodownload.ui.home.HomeViewModel
 import com.example.videodownload.ui.home.VideoPlayerScreen
 import com.example.videodownload.ui.settings.SettingsScreen
+import com.example.videodownload.R
 
 sealed class Screen(
     val route: String,
-    val title: String,
+    @param:StringRes val titleRes: Int,
     val selectedIcon: ImageVector? = null,
     val unselectedIcon: ImageVector? = null
 ) {
-    data object Home : Screen("home", "首页", Icons.Filled.Home, Icons.Outlined.Home)
-    data object Downloads : Screen("downloads", "视频", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary)
-    data object Settings : Screen("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings)
+    data object Home : Screen("home", R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home)
+    data object Downloads : Screen("downloads", R.string.nav_videos, Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary)
+    data object Settings : Screen("settings", R.string.nav_settings, Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 private data class PlayerRequest(val uri: String, val title: String)
@@ -97,6 +100,7 @@ fun AppNavigation() {
                     ) {
                         bottomNavItems.forEach { screen ->
                             val selected = selectedRoute == screen.route
+                            val title = stringResource(screen.titleRes)
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -112,13 +116,13 @@ fun AppNavigation() {
                             ) {
                                 Icon(
                                     imageVector = if (selected) screen.selectedIcon!! else screen.unselectedIcon!!,
-                                    contentDescription = screen.title,
+                                    contentDescription = title,
                                     tint = if (selected) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    screen.title,
+                                    title,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (selected) MaterialTheme.colorScheme.primary

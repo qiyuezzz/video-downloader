@@ -1,6 +1,7 @@
 package com.example.videodownload.parser
 
 import android.content.Context
+import com.example.videodownload.R
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -39,7 +40,7 @@ object YtDlpEngine {
                     } catch (retryError: Throwable) {
                         lastInitializationError = retryError
                         throw IllegalStateException(
-                            "yt-dlp 引擎初始化失败：${rootMessage(retryError)}",
+                            appContext.getString(R.string.error_ytdlp_init, rootMessage(retryError)),
                             retryError,
                         )
                     }

@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.example.videodownload.R
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -28,7 +30,6 @@ import androidx.core.net.toUri
 import android.view.LayoutInflater
 import android.view.View
 import androidx.activity.compose.BackHandler
-import com.example.videodownload.R
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -114,7 +115,11 @@ fun VideoPlayerScreen(
                 },
                 colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.5f))
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.common_back),
+                    tint = Color.White,
+                )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Text(

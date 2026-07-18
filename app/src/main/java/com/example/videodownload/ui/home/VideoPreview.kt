@@ -14,12 +14,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import com.example.videodownload.R
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -35,9 +37,20 @@ fun VideoPreview(
     webpageUrl: String = "",
 ) {
     val context = LocalContext.current
+    val serverDeniedMessage = stringResource(R.string.preview_server_denied)
+    val parseFailedMessage = stringResource(R.string.preview_parse_failed)
+    val playbackErrorPrefix = stringResource(R.string.preview_playback_error_prefix)
+    val previewFailedPrefix = stringResource(R.string.preview_failed_prefix)
 
     // 当 URL 或网页来源变化时，重新构建播放器以确保 Header 正确
-    val exoPlayer = remember(videoUrl, webpageUrl) {
+    val exoPlayer = remember(
+        videoUrl,
+        webpageUrl,
+        serverDeniedMessage,
+        parseFailedMessage,
+        playbackErrorPrefix,
+        previewFailedPrefix,
+    ) {
         val okHttpClient = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
@@ -75,12 +88,16 @@ fun VideoPreview(
                     override fun onPlayerError(error: PlaybackException) {
                         android.util.Log.e("VideoPreview", "ExoPlayer Error [${error.errorCode}]: ${error.errorCodeName}", error)
                         val message = when(error.errorCode) {
-                            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "服务器拒绝访问 (403)"
+                            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> serverDeniedMessage
                             PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-                            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> "视频解析失败 (请尝试刷新或重新解析)"
-                            else -> "播放错误: ${error.errorCodeName}"
+                            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> parseFailedMessage
+                            else -> playbackErrorPrefix + error.errorCodeName
                         }
-                        Toast.makeText(context, "播放预览失败: $message", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            previewFailedPrefix + message,
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
                 })
 

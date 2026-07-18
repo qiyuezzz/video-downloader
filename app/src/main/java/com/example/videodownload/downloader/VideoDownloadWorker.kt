@@ -26,7 +26,7 @@ class VideoDownloadWorker(
 
     override suspend fun doWork(): Result {
         val input = DownloadInput.from(inputData)
-            ?: return Result.failure(errorData("下载参数不完整"))
+            ?: return Result.failure(errorData(applicationContext.getString(R.string.error_download_input_incomplete)))
 
         setForeground(createForegroundInfo(input.fileName, -1))
         var terminalResult: Result? = null
@@ -66,7 +66,9 @@ class VideoDownloadWorker(
             }
         }
 
-        return terminalResult ?: Result.failure(errorData("下载未正常结束"))
+        return terminalResult ?: Result.failure(
+            errorData(applicationContext.getString(R.string.error_download_abnormal_end))
+        )
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =

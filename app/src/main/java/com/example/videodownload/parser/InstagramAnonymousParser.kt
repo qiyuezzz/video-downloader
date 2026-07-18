@@ -1,5 +1,7 @@
 package com.example.videodownload.parser
 
+import android.content.Context
+import com.example.videodownload.R
 import com.example.videodownload.data.model.VideoFormat
 import com.example.videodownload.data.model.VideoInfo
 import com.example.videodownload.util.NetworkClients
@@ -13,6 +15,7 @@ import okhttp3.Request
  */
 class InstagramAnonymousParser(
     private val client: OkHttpClient = NetworkClients.standard,
+    private val context: Context? = null,
 ) : VideoParser {
 
     override fun supports(url: String): Boolean =
@@ -49,7 +52,9 @@ class InstagramAnonymousParser(
             val height = metadata["og:video:height"]?.toIntOrNull() ?: 0
 
             VideoInfo(
-                title = metadata["og:title"].orEmpty().ifBlank { "Instagram 视频" },
+                title = metadata["og:title"].orEmpty().ifBlank {
+                    context?.getString(R.string.instagram_video_title) ?: "Instagram video"
+                },
                 thumbnailUrl = thumbnailUrl,
                 formats = listOf(
                     VideoFormat(
@@ -57,7 +62,7 @@ class InstagramAnonymousParser(
                         quality = if (width > 0 && height > 0) {
                             "${width}×${height}"
                         } else {
-                            "公开视频"
+                            context?.getString(R.string.public_video_quality) ?: "Video"
                         },
                         ext = "mp4",
                         filesize = null,

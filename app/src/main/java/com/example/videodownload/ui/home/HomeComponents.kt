@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.example.videodownload.R
 
 /**
  * Nova 风格统一对话框
@@ -70,7 +72,7 @@ fun NovaDeleteDialog(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                "同时删除本地视频文件",
+                                stringResource(R.string.history_delete_file_option),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Medium
@@ -96,7 +98,11 @@ fun NovaDeleteDialog(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    if (showPhysicalDeleteOption) "删除" else "确定",
+                    if (showPhysicalDeleteOption) {
+                        stringResource(R.string.common_delete)
+                    } else {
+                        stringResource(R.string.common_confirm)
+                    },
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -104,7 +110,7 @@ fun NovaDeleteDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(
-                    "取消",
+                    stringResource(R.string.common_cancel),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -123,10 +129,14 @@ fun checkFileAndRun(context: Context, uriString: String, action: () -> Unit) {
         if (docFile != null && docFile.exists()) {
             action()
         } else {
-            Toast.makeText(context, "视频文件不存在或已被删除", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.history_file_missing), Toast.LENGTH_SHORT).show()
         }
     } catch (e: Exception) {
-        Toast.makeText(context, "操作失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            context,
+            context.getString(R.string.history_operation_failed, e.message.orEmpty()),
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 }
 
@@ -143,7 +153,7 @@ fun openVideo(context: Context, uriString: String) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
-        val chooser = Intent.createChooser(intent, "选择播放器播放视频")
+        val chooser = Intent.createChooser(intent, context.getString(R.string.history_choose_player))
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)
     }

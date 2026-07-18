@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import coil.compose.AsyncImage
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.videodownload.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,16 +54,16 @@ fun DownloadHistoryScreen(
         history.groupingBy(::historyPlatform).eachCount()
     }
     val platformFilters = remember(history, platformCounts) {
-        listOf("全部" to history.size) + PLATFORM_ORDER.mapNotNull { platform ->
+        listOf(ALL_PLATFORM to history.size) + PLATFORM_ORDER.mapNotNull { platform ->
             platformCounts[platform]?.let { platform to it }
         }
     }
-    var selectedPlatform by rememberSaveable { mutableStateOf("全部") }
+    var selectedPlatform by rememberSaveable { mutableStateOf(ALL_PLATFORM) }
     LaunchedEffect(platformFilters) {
-        if (platformFilters.none { it.first == selectedPlatform }) selectedPlatform = "全部"
+        if (platformFilters.none { it.first == selectedPlatform }) selectedPlatform = ALL_PLATFORM
     }
     val filteredHistory = remember(history, selectedPlatform) {
-        if (selectedPlatform == "全部") history
+        if (selectedPlatform == ALL_PLATFORM) history
         else history.filter { historyPlatform(it) == selectedPlatform }
     }
     val context = LocalContext.current
@@ -78,8 +80,8 @@ fun DownloadHistoryScreen(
 
     if (showDeleteDialog) {
         NovaDeleteDialog(
-            title = "确认删除",
-            content = "确定要从列表中删除选中的 ${selectedItems.size} 项记录吗？",
+            title = stringResource(R.string.history_delete_title),
+            content = stringResource(R.string.history_delete_message, selectedItems.size),
             onDismiss = { showDeleteDialog = false },
             onConfirm = {
                 viewModel.removeHistoryItems(selectedItems.toList(), deletePhysicalFile)
@@ -100,16 +102,24 @@ fun DownloadHistoryScreen(
                 title = {
                     Column {
                         Text(
-                            if (isEditMode) "已选择 ${selectedItems.size} 项" else "本地视频",
+                            if (isEditMode) {
+                                stringResource(R.string.common_selected_count, selectedItems.size)
+                            } else {
+                                stringResource(R.string.history_title)
+                            },
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                         if (!isEditMode) {
                             Text(
                                 when {
-                                    history.isEmpty() -> "所选目录中的视频会出现在这里"
-                                    selectedPlatform == "全部" -> "共 ${history.size} 个本地视频"
-                                    else -> "$selectedPlatform · ${filteredHistory.size} 个视频"
+                                    history.isEmpty() -> stringResource(R.string.history_empty_hint)
+                                    selectedPlatform == ALL_PLATFORM -> stringResource(R.string.history_total, history.size)
+                                    else -> stringResource(
+                                        R.string.history_platform_total,
+                                        platformDisplayName(selectedPlatform),
+                                        filteredHistory.size,
+                                    )
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -128,7 +138,7 @@ fun DownloadHistoryScreen(
                                     selectedItems.addAll(visibleIds.filter { it !in selectedItems })
                                 }
                             }) {
-                                Icon(Icons.Filled.SelectAll, contentDescription = "全选")
+                                Icon(Icons.Filled.SelectAll, contentDescription = stringResource(R.string.common_select_all))
                             }
                             FilledTonalIconButton(
                                 onClick = { if (selectedItems.isNotEmpty()) showDeleteDialog = true },
@@ -136,7 +146,7 @@ fun DownloadHistoryScreen(
                             ) {
                                 Icon(
                                     Icons.Filled.Delete,
-                                    contentDescription = "删除选中",
+                                    contentDescription = stringResource(R.string.history_delete_selected),
                                     tint = if (selectedItems.isNotEmpty())
                                         MaterialTheme.colorScheme.error
                                     else
@@ -148,7 +158,7 @@ fun DownloadHistoryScreen(
                                 selectedItems.clear()
                             }) {
                                 Text(
-                                    "取消",
+                                    stringResource(R.string.common_cancel),
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -164,9 +174,9 @@ fun DownloadHistoryScreen(
                                         else -> Icons.AutoMirrored.Filled.ViewList
                                     },
                                     contentDescription = when (layoutMode) {
-                                        SettingsDataStore.HISTORY_LAYOUT_LIST -> "切换到双列网格"
-                                        SettingsDataStore.HISTORY_LAYOUT_GRID -> "切换到三列网格"
-                                        else -> "切换到列表"
+                                        SettingsDataStore.HISTORY_LAYOUT_LIST -> stringResource(R.string.history_switch_two_columns)
+                                        SettingsDataStore.HISTORY_LAYOUT_GRID -> stringResource(R.string.history_switch_three_columns)
+                                        else -> stringResource(R.string.history_switch_list)
                                     },
                                     modifier = Modifier.size(22.dp),
                                 )
@@ -174,7 +184,7 @@ fun DownloadHistoryScreen(
                             IconButton(onClick = { isEditMode = true }) {
                                 Icon(
                                     Icons.Filled.Edit,
-                                    contentDescription = "编辑",
+                                    contentDescription = stringResource(R.string.common_edit),
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -221,13 +231,13 @@ fun DownloadHistoryScreen(
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             Text(
-                                text = "还没有下载内容",
+                                text = stringResource(R.string.history_no_content),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "前往设置选择保存目录，或返回首页下载视频。",
+                                text = stringResource(R.string.history_no_content_description),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -245,7 +255,7 @@ fun DownloadHistoryScreen(
                                 FilterChip(
                                     selected = selectedPlatform == platform,
                                     onClick = { selectedPlatform = platform },
-                                    label = { Text("$platform · $count") },
+                                    label = { Text("${platformDisplayName(platform)} · $count") },
                                     leadingIcon = if (selectedPlatform == platform) {
                                         {
                                             Icon(
@@ -525,7 +535,15 @@ internal fun historyPreviewModel(item: DownloadHistoryItem): String? =
     item.thumbnailUrl?.takeIf { it.startsWith("https://", ignoreCase = true) }
         ?: item.fileUri.takeIf(String::isNotBlank)
 
+private const val ALL_PLATFORM = "__all__"
 private val PLATFORM_ORDER = listOf("Bilibili", "X", "Instagram", "YouTube", "其他")
+
+@Composable
+private fun platformDisplayName(platform: String): String = when (platform) {
+    ALL_PLATFORM -> stringResource(R.string.history_all)
+    "其他" -> stringResource(R.string.history_other)
+    else -> platform
+}
 
 internal fun nextHistoryLayout(current: Int): Int = when (current) {
     SettingsDataStore.HISTORY_LAYOUT_LIST -> SettingsDataStore.HISTORY_LAYOUT_GRID

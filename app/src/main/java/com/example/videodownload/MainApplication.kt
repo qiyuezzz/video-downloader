@@ -1,6 +1,7 @@
 package com.example.videodownload
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -11,12 +12,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.example.videodownload.util.AppLanguage
 
 /**
  * Application 类，用于全局初始化
  */
 class MainApplication : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(AppLanguage.wrapContext(base))
+    }
 
     override fun onCreate() {
         super.onCreate()

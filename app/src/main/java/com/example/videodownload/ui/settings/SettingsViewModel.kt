@@ -7,6 +7,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.videodownload.data.DownloadRecordCodec
+import com.example.videodownload.R
 import com.example.videodownload.data.SettingsDataStore
 import com.example.videodownload.data.model.DownloadHistoryItem
 import com.example.videodownload.parser.YtDlpEngine
@@ -89,15 +90,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "扫描下载目录失败", e)
-                HistoryRestoreState.Error(e.message ?: "无法读取所选目录")
+                HistoryRestoreState.Error(e.message ?: getApplication<Application>().getString(R.string.error_directory_unreadable))
             }
         }
     }
 
     private suspend fun restoreHistoryFromDirectory(uri: String): Int = withContext(Dispatchers.IO) {
         val root = DocumentFile.fromTreeUri(getApplication(), uri.toUri())
-            ?: throw IOException("无法访问所选目录")
-        if (!root.exists() || !root.isDirectory) throw IOException("所选目录不可用")
+            ?: throw IOException(getApplication<Application>().getString(R.string.error_directory_inaccessible))
+        if (!root.exists() || !root.isDirectory) {
+            throw IOException(getApplication<Application>().getString(R.string.error_directory_unavailable))
+        }
 
         val existing = settingsDataStore.downloadHistory.first()
             ?.let(DownloadRecordCodec::decodeHistory)
@@ -174,7 +177,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 Log.d("SettingsViewModel", "yt-dlp updated, status: $result")
-                _updateState.value = UpdateState.Success("更新成功 (状态: $result)")
+                _updateState.value = UpdateState.Success(
+                    getApplication<Application>().getString(R.string.settings_update_success, result)
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
