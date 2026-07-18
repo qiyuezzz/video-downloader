@@ -7,7 +7,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,10 +34,14 @@ import com.example.videodownload.util.AppLanguage
 
 class MainActivity : ComponentActivity() {
     private var attachedThemeMode = SettingsDataStore.THEME_SYSTEM
+    // 跟随系统模式下的系统深色状态。configChanges="uiMode" 下 Activity 不重建，
+    // isSystemInDarkTheme() 无法在后台切换后可靠刷新，改用可观测状态主动驱动 Compose 重组。
+    private var systemDarkTheme by mutableStateOf(false)
 
     override fun attachBaseContext(newBase: Context) {
         val localizedContext = AppLanguage.wrapContext(newBase)
         attachedThemeMode = localizedContext.cachedThemeMode()
+        systemDarkTheme = localizedContext.resources.configuration.usesNightMode()
 
         val themedContext = when (attachedThemeMode) {
             SettingsDataStore.THEME_LIGHT -> localizedContext.withNightMode(
@@ -85,7 +88,7 @@ class MainActivity : ComponentActivity() {
             val isDarkTheme = when (themeMode) {
                 SettingsDataStore.THEME_LIGHT -> false
                 SettingsDataStore.THEME_DARK -> true
-                else -> isSystemInDarkTheme()
+                else -> systemDarkTheme
             }
             SideEffect { updateWindowAppearance(isDarkTheme) }
             VideoDownloadTheme(darkTheme = isDarkTheme) {
@@ -102,6 +105,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // 必须用系统传入的 newConfig：applicationContext 的 Configuration 不会随系统 uiMode
+        // 实时刷新，跟随系统模式下会读不到最新深色状态。
+        systemDarkTheme = newConfig.usesNightMode()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 从系统设置返回 App 时补一次同步；此时 Activity 的 configuration 已是最新。
+        systemDarkTheme = resources.configuration.usesNightMode()
     }
 
     private fun updateWindowAppearance(isDarkTheme: Boolean) {
@@ -144,6 +160,9 @@ private fun Context.withNightMode(nightMode: Int): Context {
     }
     return createConfigurationContext(configuration)
 }
+
+private fun Configuration.usesNightMode(): Boolean =
+    uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
 @Composable
 private fun LanguageSelectionDialog(onSelected: (String) -> Unit) {
