@@ -7,10 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
@@ -43,7 +43,7 @@ sealed class Screen(
     val unselectedIcon: ImageVector? = null
 ) {
     data object Home : Screen("home", "首页", Icons.Filled.Home, Icons.Outlined.Home)
-    data object Downloads : Screen("downloads", "下载", Icons.Filled.Download, Icons.Outlined.Download)
+    data object Downloads : Screen("downloads", "视频", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary)
     data object Settings : Screen("settings", "设置", Icons.Filled.Settings, Icons.Outlined.Settings)
     data object VideoPlayer : Screen("video_player/{uri}/{title}", "播放器") {
         fun createRoute(uri: String, title: String): String {

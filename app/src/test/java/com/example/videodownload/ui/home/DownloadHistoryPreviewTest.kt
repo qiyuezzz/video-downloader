@@ -6,6 +6,13 @@ import org.junit.Test
 
 class DownloadHistoryPreviewTest {
     @Test
+    fun `历史布局按列表双列三列循环切换`() {
+        assertEquals(1, nextHistoryLayout(0))
+        assertEquals(2, nextHistoryLayout(1))
+        assertEquals(0, nextHistoryLayout(2))
+    }
+
+    @Test
     fun `扫描历史使用本地视频生成预览`() {
         val item = historyItem(thumbnailUrl = null)
         assertEquals(item.fileUri, historyPreviewModel(item))

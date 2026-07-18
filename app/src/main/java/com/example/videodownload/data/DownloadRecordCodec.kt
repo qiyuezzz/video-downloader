@@ -47,7 +47,7 @@ object DownloadRecordCodec {
 
     fun encodeHistory(items: List<DownloadHistoryItem>): String {
         val array = JSONArray()
-        items.take(MAX_HISTORY_SIZE).forEach { item ->
+        items.forEach { item ->
             array.put(JSONObject().apply {
                 put("id", item.id)
                 put("title", item.title)
@@ -85,6 +85,4 @@ object DownloadRecordCodec {
 
     private fun JSONObject.nullableString(key: String): String? =
         optString(key, "").takeUnless { it.isBlank() || it == "null" }
-
-    private const val MAX_HISTORY_SIZE = 500
 }

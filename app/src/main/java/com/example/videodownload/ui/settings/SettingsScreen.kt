@@ -143,7 +143,7 @@ fun SettingsScreen(
                                     HistoryRestoreState.Idle -> "按平台建立子目录 · 点击更换"
                                     HistoryRestoreState.Scanning -> "正在扫描已有视频…"
                                     is HistoryRestoreState.Success -> if (state.restoredCount > 0) {
-                                        "已恢复 ${state.restoredCount} 个视频到历史记录"
+                                        "已添加 ${state.restoredCount} 个视频到本地视频"
                                     } else {
                                         "扫描完成，没有需要恢复的新视频"
                                     }

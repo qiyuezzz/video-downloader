@@ -68,6 +68,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _history = MutableStateFlow<List<DownloadHistoryItem>>(emptyList())
     val history: StateFlow<List<DownloadHistoryItem>> = _history
 
+    val historyLayout: StateFlow<Int> = settingsDataStore.historyLayout.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        SettingsDataStore.HISTORY_LAYOUT_LIST,
+    )
+
     private val _clipboardUrl = MutableStateFlow<String?>(null)
     val clipboardUrl: StateFlow<String?> = _clipboardUrl
 
@@ -342,6 +348,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 current.map { if (it.id == taskId) resumableTask else it }
             }
             enqueueDownload(resumableTask, downloadedBytes)
+        }
+    }
+
+    fun setHistoryLayout(layout: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setHistoryLayout(layout)
         }
     }
 

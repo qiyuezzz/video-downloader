@@ -1,6 +1,7 @@
 package com.example.videodownload.ui.home
 
 import com.example.videodownload.data.model.DownloadHistoryItem
+import com.example.videodownload.data.SettingsDataStore
 import com.example.videodownload.util.VideoPlatform
 
 import androidx.compose.animation.*
@@ -46,6 +47,7 @@ fun DownloadHistoryScreen(
     onPlayVideo: (String, String) -> Unit
 ) {
     val history by viewModel.history.collectAsStateWithLifecycle()
+    val layoutMode by viewModel.historyLayout.collectAsStateWithLifecycle()
     val platformCounts = remember(history) {
         history.groupingBy(::historyPlatform).eachCount()
     }
@@ -55,7 +57,6 @@ fun DownloadHistoryScreen(
         }
     }
     var selectedPlatform by rememberSaveable { mutableStateOf("全部") }
-    var useGridLayout by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(platformFilters) {
         if (platformFilters.none { it.first == selectedPlatform }) selectedPlatform = "全部"
     }
@@ -99,14 +100,14 @@ fun DownloadHistoryScreen(
                 title = {
                     Column {
                         Text(
-                            if (isEditMode) "已选择 ${selectedItems.size} 项" else "下载历史",
+                            if (isEditMode) "已选择 ${selectedItems.size} 项" else "本地视频",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                         )
                         if (!isEditMode) {
                             Text(
                                 when {
-                                    history.isEmpty() -> "保存的视频会出现在这里"
+                                    history.isEmpty() -> "所选目录中的视频会出现在这里"
                                     selectedPlatform == "全部" -> "共 ${history.size} 个本地视频"
                                     else -> "$selectedPlatform · ${filteredHistory.size} 个视频"
                                 },
@@ -153,10 +154,20 @@ fun DownloadHistoryScreen(
                                 )
                             }
                         } else {
-                            IconButton(onClick = { useGridLayout = !useGridLayout }) {
+                            IconButton(onClick = {
+                                viewModel.setHistoryLayout(nextHistoryLayout(layoutMode))
+                            }) {
                                 Icon(
-                                    if (useGridLayout) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView,
-                                    contentDescription = if (useGridLayout) "切换到列表" else "切换到网格",
+                                    imageVector = when (layoutMode) {
+                                        SettingsDataStore.HISTORY_LAYOUT_LIST -> Icons.Filled.GridView
+                                        SettingsDataStore.HISTORY_LAYOUT_GRID -> Icons.Filled.ViewModule
+                                        else -> Icons.AutoMirrored.Filled.ViewList
+                                    },
+                                    contentDescription = when (layoutMode) {
+                                        SettingsDataStore.HISTORY_LAYOUT_LIST -> "切换到双列网格"
+                                        SettingsDataStore.HISTORY_LAYOUT_GRID -> "切换到三列网格"
+                                        else -> "切换到列表"
+                                    },
                                     modifier = Modifier.size(22.dp),
                                 )
                             }
@@ -215,7 +226,7 @@ fun DownloadHistoryScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "返回首页粘贴视频链接，选择画质后即可保存到本地。",
+                                text = "前往设置选择保存目录，或返回首页下载视频。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -246,18 +257,24 @@ fun DownloadHistoryScreen(
                                 )
                             }
                         }
-                        if (useGridLayout) {
+                        if (layoutMode != SettingsDataStore.HISTORY_LAYOUT_LIST) {
+                            val compact = layoutMode == SettingsDataStore.HISTORY_LAYOUT_COMPACT_GRID
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
+                                columns = GridCells.Fixed(if (compact) 3 else 2),
                                 modifier = Modifier.weight(1f),
-                                contentPadding = HISTORY_CONTENT_PADDING,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = if (compact) {
+                                    PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                } else {
+                                    HISTORY_CONTENT_PADDING
+                                },
+                                horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
                             ) {
                                 items(filteredHistory.size, key = { filteredHistory[it].id }) { index ->
                                     val item = filteredHistory[index]
                                     NovaHistoryGridCard(
                                         item = item,
+                                        compact = compact,
                                         isEditMode = isEditMode,
                                         isSelected = selectedItems.contains(item.id),
                                         onClick = {
@@ -305,13 +322,14 @@ fun DownloadHistoryScreen(
 @Composable
 private fun NovaHistoryGridCard(
     item: DownloadHistoryItem,
+    compact: Boolean,
     isEditMode: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(if (compact) 14.dp else 20.dp),
         color = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
         } else {
@@ -345,7 +363,9 @@ private fun NovaHistoryGridCard(
                         Icons.Filled.PlayArrow,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.padding(6.dp).size(18.dp),
+                        modifier = Modifier
+                            .padding(if (compact) 4.dp else 6.dp)
+                            .size(if (compact) 14.dp else 18.dp),
                     )
                 }
                 if (isEditMode) {
@@ -361,20 +381,26 @@ private fun NovaHistoryGridCard(
                     )
                 }
             }
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.padding(if (compact) 8.dp else 12.dp)) {
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = if (compact) {
+                        MaterialTheme.typography.bodySmall
+                    } else {
+                        MaterialTheme.typography.titleSmall
+                    },
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(modifier = Modifier.height(5.dp))
-                Text(
-                    text = formatDate(item.timestamp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (!compact) {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text = formatDate(item.timestamp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -501,6 +527,12 @@ internal fun historyPreviewModel(item: DownloadHistoryItem): String? =
         ?: item.fileUri.takeIf(String::isNotBlank)
 
 private val PLATFORM_ORDER = listOf("Bilibili", "X", "Instagram", "YouTube", "其他")
+
+internal fun nextHistoryLayout(current: Int): Int = when (current) {
+    SettingsDataStore.HISTORY_LAYOUT_LIST -> SettingsDataStore.HISTORY_LAYOUT_GRID
+    SettingsDataStore.HISTORY_LAYOUT_GRID -> SettingsDataStore.HISTORY_LAYOUT_COMPACT_GRID
+    else -> SettingsDataStore.HISTORY_LAYOUT_LIST
+}
 
 private val HISTORY_CONTENT_PADDING = PaddingValues(
     start = 20.dp,

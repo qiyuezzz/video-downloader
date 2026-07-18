@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -21,10 +22,15 @@ class SettingsDataStore(private val context: Context) {
         private val PREFERRED_QUALITY_KEY = stringPreferencesKey("preferred_quality")
         private val DOWNLOAD_HISTORY_KEY = stringPreferencesKey("download_history")
         private val ACTIVE_DOWNLOADS_KEY = stringPreferencesKey("active_downloads")
+        private val HISTORY_LAYOUT_KEY = intPreferencesKey("history_layout")
 
         const val QUALITY_BEST = "best"
         const val QUALITY_720P = "720p"
         const val QUALITY_480P = "480p"
+
+        const val HISTORY_LAYOUT_LIST = 0
+        const val HISTORY_LAYOUT_GRID = 1
+        const val HISTORY_LAYOUT_COMPACT_GRID = 2
     }
 
     /** 保存目录的 URI 字符串 */
@@ -45,6 +51,12 @@ class SettingsDataStore(private val context: Context) {
     /** 活跃下载任务 JSON 字符串 */
     val activeDownloads: Flow<String?> = context.dataStore.data.map { prefs ->
         prefs[ACTIVE_DOWNLOADS_KEY]
+    }
+
+    /** 本地视频页布局：列表、双列或三列。 */
+    val historyLayout: Flow<Int> = context.dataStore.data.map { prefs ->
+        prefs[HISTORY_LAYOUT_KEY]?.takeIf { it in HISTORY_LAYOUT_LIST..HISTORY_LAYOUT_COMPACT_GRID }
+            ?: HISTORY_LAYOUT_LIST
     }
 
     /** 更新历史记录 */
@@ -72,6 +84,15 @@ class SettingsDataStore(private val context: Context) {
     suspend fun setPreferredQuality(quality: String) {
         context.dataStore.edit { prefs ->
             prefs[PREFERRED_QUALITY_KEY] = quality
+        }
+    }
+
+    suspend fun setHistoryLayout(layout: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[HISTORY_LAYOUT_KEY] = layout.coerceIn(
+                HISTORY_LAYOUT_LIST,
+                HISTORY_LAYOUT_COMPACT_GRID,
+            )
         }
     }
 }
