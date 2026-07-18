@@ -55,7 +55,7 @@ val NovaSurfaceContainer = Color(0xFFEBEDF5)
 val NovaSurfaceContainerHigh = Color(0xFFE6E8F0)
 val NovaSurfaceContainerHighest = Color(0xFFE0E3ED)
 
-// 深色模式使用 Flyme 切换页面后的稳定灰色，避免明暗跳变。
+// 深色模式使用稳定灰色背景，避免页面切换时出现明暗跳变。
 val NovaBackgroundDark = Color(0xFF343538)
 val NovaSurfaceDark = Color(0xFF38393E)
 val NovaSurfaceVariantDark = Color(0xFF303238)

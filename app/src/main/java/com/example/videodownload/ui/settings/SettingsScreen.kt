@@ -396,6 +396,13 @@ private fun CompactOptionSelector(
                     selected = selectedValue == value,
                     onClick = { onSelected(value) },
                     shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    colors = SegmentedButtonDefaults.colors(
+                        // 选中态沿用主题 primary 系，避免默认 secondary 带来的青绿色与主题不统一
+                        activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        // 外层 Surface 已有 outlineVariant 边框，选中项不再单独描边，避免突兀
+                        activeBorderColor = Color.Transparent,
+                    ),
                     modifier = Modifier.weight(1f),
                     icon = {},
                 ) {
