@@ -14,6 +14,25 @@
 - Release 构建启用 `minify`+`shrinkResources`，`app/proguard-rules.pro` 会**移除所有 `android.util.Log` 调用**，因此不要依赖日志做发布版问题排查；如需保留诊断信息请走其他通道。新增依赖若含反射调用，需在 `proguard-rules.pro` 中补充 keep 规则。
 - Release 签名通过 Gradle 属性配置（`RELEASE_STORE_FILE`/`RELEASE_STORE_PASSWORD`/`RELEASE_KEY_ALIAS`/`RELEASE_KEY_PASSWORD`），缺一不创建 `release` signingConfig；签名文件与密码不入库。
 
+## CI/CD 流程
+
+项目配置了 GitHub Actions 工作流（`.github/workflows/release.yml`），在推送以 `v` 开头的 Tag（如 `v1.1.2`）时会自动触发构建并创建 Release。
+
+### GitHub Secrets 配置
+为了使 CI 构建成功并完成签名，需要在 GitHub 仓库中配置以下 Secrets：
+- `RELEASE_STORE_FILE_BASE64`：JKS 签名文件的 Base64 编码字符串。
+- `RELEASE_STORE_PASSWORD`：签名文件库密码。
+- `RELEASE_KEY_ALIAS`：密钥别名。
+- `RELEASE_KEY_PASSWORD`：密钥密码。
+
+可以使用以下命令生成 Base64 字符串（macOS/Linux）：
+`base64 -i your_keystore.jks | pbcopy`
+或者（Windows PowerShell）：
+`[Convert]::ToBase64String([IO.File]::ReadAllBytes("your_keystore.jks")) | clip`
+
+> [!NOTE]
+> 签名文件（`.jks`）和密码属于敏感信息，仅由维护者本机保管，不入库；CI 通过 GitHub Secrets 注入。
+
 ## 构建命令（Windows 用 `.\gradlew.bat`，macOS/Linux 用 `./gradlew`）
 
 - `./gradlew assembleDebug`：编译可调试 APK，输出 `app/build/outputs/apk/debug/app-debug.apk`。

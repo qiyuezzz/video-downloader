@@ -1,0 +1,120 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.RELEASE_STORE_FILE_BASE64 }}" | base64 --decode > release.jks
+
+      - name: Build Release APK
+        run: >
+          ./gradlew assembleRelease
+          -PRELEASE_STORE_FILE=../release.jks
+          -PRELEASE_STORE_PASSWORD=${{ secrets.RELEASE_STORE_PASSWORD }}
+          -PRELEASE_KEY_ALIAS=${{ secrets.RELEASE_KEY_ALIAS }}
+          -PRELEASE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: Get Version Name
+        id: get_version
+        run: |
+          VERSION_NAME=$(grep "versionName =" app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+
+      - name: Rename APK
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/VideoDownloader_${{ env.VERSION_NAME }}.apk
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          # 取上一个 tag 作为比较基准，没有则用首个 commit
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+
+          # 按 Conventional Commit 类型分组，去掉前缀只保留描述
+          extract() {
+            local type="$1"
+            git log "$PREV_TAG..HEAD" --pretty=format:"%s" \
+              | awk -v t="^${type}" '$0 ~ t' \
+              | sed -E "s/^${type}(\(.+\))?:[[:space:]]*//" \
+              | sed 's/^/- /'
+          }
+
+          {
+            echo "BODY<<EOF"
+            echo "## 更新内容"
+            echo ""
+            feats=$(extract feat)
+            fixes=$(extract fix)
+            perf=$(extract perf)
+            refactors=$(extract refactor)
+            docs=$(extract docs)
+            chores=$(extract chore)
+            if [ -n "$feats" ]; then
+              echo "### 新增"
+              echo "$feats"
+              echo ""
+            fi
+            if [ -n "$fixes" ]; then
+              echo "### 修复"
+              echo "$fixes"
+              echo ""
+            fi
+            if [ -n "$perf" ]; then
+              echo "### 性能"
+              echo "$perf"
+              echo ""
+            fi
+            if [ -n "$refactors" ]; then
+              echo "### 重构"
+              echo "$refactors"
+              echo ""
+            fi
+            if [ -n "$docs" ]; then
+              echo "### 文档"
+              echo "$docs"
+              echo ""
+            fi
+            if [ -n "$chores" ]; then
+              echo "### 其他"
+              echo "$chores"
+              echo ""
+            fi
+            echo "---"
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...v${VERSION_NAME}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: app/build/outputs/apk/release/VideoDownloader_${{ env.VERSION_NAME }}.apk
+          body: ${{ env.BODY }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
