@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 使用系统内置的 Material Light 主题 -->
-    <style name="Theme.VideoDownload" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- 深色模式使用原生 Dark 窗口，避免 OEM 对 Compose Surface 二次反色 -->
+    <style name="Theme.VideoDownload" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowBackground">@color/app_window_background</item>
-        <!-- 深色模式由 Compose 主题统一控制，禁止系统再次自动改色 -->
         <item name="android:forceDarkAllowed">false</item>
     </style>
 </resources>

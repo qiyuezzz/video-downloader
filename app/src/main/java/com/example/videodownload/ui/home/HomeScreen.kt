@@ -217,9 +217,8 @@ private fun NovaPasteSection(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
     ) {
         Column(modifier = Modifier.padding(22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -388,7 +387,7 @@ private fun HomeFeatureCard(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -449,7 +448,6 @@ private fun NovaResultCard(videoInfo: VideoInfo, onShowOptions: () -> Unit) {
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 2.dp,
     ) {
         Column {
             Box(
@@ -615,13 +613,14 @@ private fun NovaActiveDownloadList(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = MaterialTheme.colorScheme.background,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         tonalElevation = 0.dp
     ) {
-        Column(modifier = Modifier.padding(vertical = 20.dp)) {
+        Column {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -655,7 +654,7 @@ private fun NovaActiveDownloadList(
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.padding(top = 14.dp)
+                modifier = Modifier.padding(bottom = 20.dp)
             ) {
                 items(activeTasks, key = { it.id }) { task ->
                     DownloadTaskItem(
@@ -686,7 +685,6 @@ fun DownloadTaskItem(
         modifier = Modifier.width(190.dp),
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp
     ) {
         Column {
             // 缩略图区域

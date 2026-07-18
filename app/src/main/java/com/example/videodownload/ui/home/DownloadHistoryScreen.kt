@@ -183,6 +183,7 @@ fun DownloadHistoryScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
@@ -340,7 +341,6 @@ private fun NovaHistoryGridCard(
             if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
             else MaterialTheme.colorScheme.outlineVariant,
         ),
-        shadowElevation = if (isSelected) 3.dp else 1.dp,
     ) {
         Column {
             Box(
@@ -433,7 +433,6 @@ fun NovaHistoryCard(
             .clickable { onClick() },
         shape = RoundedCornerShape(22.dp),
         color = containerColor,
-        shadowElevation = if (isSelected) 4.dp else 1.dp,
         border = BorderStroke(
             1.dp,
             if (isEditMode) borderColor else MaterialTheme.colorScheme.outlineVariant,
