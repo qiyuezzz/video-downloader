@@ -20,8 +20,8 @@ android {
         applicationId = "com.example.videodownload"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
 
         androidResources {
             localeFilters += listOf("zh", "en")
