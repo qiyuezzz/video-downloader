@@ -107,5 +107,6 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
     testImplementation(libs.junit)
+    testImplementation(libs.json)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

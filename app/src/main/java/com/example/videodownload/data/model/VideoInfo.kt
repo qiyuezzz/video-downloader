@@ -40,4 +40,6 @@ data class VideoInfo(
     val thumbnailUrl: String?,
     val formats: List<VideoFormat>,
     val webpageUrl: String,
+    /** 视频时长，毫秒；解析器无法获取时为 null。 */
+    val durationMillis: Long? = null,
 )

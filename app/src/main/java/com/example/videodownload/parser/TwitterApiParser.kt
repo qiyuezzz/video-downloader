@@ -73,9 +73,14 @@ class TwitterApiParser(
             tweet.optJSONObject("quote")?.let(::add)
         }
         val formats = mutableListOf<VideoFormat>()
+        var durationMillis: Long? = null
         mediaOwners.forEachIndexed { ownerIndex, owner ->
             val videos = owner.optJSONObject("media")?.optJSONArray("videos") ?: return@forEachIndexed
-            appendFxVideos(videos, ownerIndex, formats)
+            appendFxVideos(videos, ownerIndex, formats) { duration ->
+                if (durationMillis == null && duration > 0) {
+                    durationMillis = duration
+                }
+            }
         }
         if (formats.isEmpty()) return null
 
@@ -84,6 +89,7 @@ class TwitterApiParser(
             thumbnailUrl = formats.firstNotNullOfOrNull(VideoFormat::thumbnailUrl),
             formats = formats.distinctBy(VideoFormat::url),
             webpageUrl = webpageUrl,
+            durationMillis = durationMillis,
         )
     }
 
@@ -91,6 +97,7 @@ class TwitterApiParser(
         videos: JSONArray,
         ownerIndex: Int,
         output: MutableList<VideoFormat>,
+        onDuration: (Long) -> Unit = {},
     ) {
         for (index in 0 until videos.length()) {
             val video = videos.optJSONObject(index) ?: continue
@@ -99,6 +106,12 @@ class TwitterApiParser(
             val thumbnail = video.optString("thumbnail_url").ifBlank {
                 video.optString("thumbnail")
             }.takeIf { it.isNotBlank() }
+            // fxtwitter 视频对象可能以秒为单位提供 duration（整数或浮点）
+            val durationSeconds = video.optDouble("duration", 0.0).takeIf { it > 0 }
+                ?: video.optInt("duration", 0).takeIf { it > 0 }?.toDouble()
+            if (durationSeconds != null) {
+                onDuration((durationSeconds * 1000L).toLong())
+            }
             output += VideoFormat(
                 formatId = "fx_${ownerIndex}_$index",
                 quality = if (height > 0) "${height}p" else "Video ${output.size + 1}",

@@ -45,6 +45,10 @@ class BilibiliNativeParser(
             val title = data.getString("title")
             val pic = normalizeThumbnailUrl(data.optString("pic"))
             val cid = data.getLong("cid")
+            val durationMillis = data.optInt("duration", 0)
+                .takeIf { it > 0 }
+                ?.toLong()
+                ?.times(1000L)
 
             // 2. 获取视频流地址 (使用 html5 平台接口，通常返回单链接 mp4)
             // qn=32 是 480P, qn=64 是 720P (游客最高通常只能到这里)
@@ -104,7 +108,8 @@ class BilibiliNativeParser(
                 title = title,
                 thumbnailUrl = pic,
                 formats = formats,
-                webpageUrl = "https://www.bilibili.com/video/$bvid"
+                webpageUrl = "https://www.bilibili.com/video/$bvid",
+                durationMillis = durationMillis,
             )
         } catch (e: CancellationException) {
             throw e

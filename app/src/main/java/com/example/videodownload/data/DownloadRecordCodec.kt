@@ -26,6 +26,7 @@ object DownloadRecordCodec {
                 put("workId", task.workId)
                 put("startedAtMillis", task.startedAtMillis)
                 put("finishedAtMillis", task.finishedAtMillis)
+                put("durationMillis", task.durationMillis ?: JSONObject.NULL)
             })
         }
         return array.toString()
@@ -48,6 +49,7 @@ object DownloadRecordCodec {
             workId = obj.optString("workId", ""),
             startedAtMillis = obj.optLong("startedAtMillis", 0),
             finishedAtMillis = obj.optLong("finishedAtMillis", 0),
+            durationMillis = obj.optLong("durationMillis", 0).takeIf { it > 0 },
         )
     }
 
@@ -64,6 +66,7 @@ object DownloadRecordCodec {
                 put("webpageUrl", item.webpageUrl)
                 put("timestamp", item.timestamp)
                 put("platform", item.platform)
+                put("durationMillis", item.durationMillis ?: JSONObject.NULL)
             })
         }
         return array.toString()
@@ -80,6 +83,7 @@ object DownloadRecordCodec {
             webpageUrl = obj.optString("webpageUrl", ""),
             timestamp = obj.getLong("timestamp"),
             platform = obj.optString("platform", ""),
+            durationMillis = obj.optLong("durationMillis", 0).takeIf { it > 0 },
         )
     }
 
