@@ -110,6 +110,25 @@
     <string name="settings_ytdlp_current_version">Current version  %1$s</string>
     <string name="settings_ytdlp_version_unknown">Current version unknown</string>
 
+    <string name="settings_app_update">App update</string>
+    <string name="settings_app_update_description">Check the latest release on GitHub and download the APK to install when a new version is available.</string>
+    <string name="settings_app_update_current_version">Current version  %1$s</string>
+    <string name="settings_app_update_version_unknown">Current version unknown</string>
+    <string name="settings_app_update_check">Check for updates</string>
+    <string name="settings_app_update_checking">Checking…</string>
+    <string name="settings_app_update_uptodate">Up to date</string>
+    <string name="settings_app_update_check_again">Check again</string>
+    <string name="settings_app_update_available">New version %1$s available</string>
+    <string name="settings_app_update_download">Download update</string>
+    <string name="settings_app_update_downloading">Downloading  %1$d%%</string>
+    <string name="settings_app_update_ready">Download complete. Tap to install</string>
+    <string name="settings_app_update_install">Install update</string>
+    <string name="settings_app_update_view_release">View release page</string>
+    <string name="settings_app_update_retry">Retry</string>
+    <string name="settings_app_update_failed">Update check failed</string>
+    <string name="settings_app_update_no_apk">No APK asset in this release. Open the release page for details</string>
+    <string name="settings_app_update_install_failed">Unable to launch the installer. Please try again later</string>
+
     <string name="error_invalid_url">No valid link was found in the input</string>
     <string name="wifi_confirm_title">Non Wi-Fi download</string>
     <string name="wifi_confirm_message">You are on mobile data. Continue downloading?</string>

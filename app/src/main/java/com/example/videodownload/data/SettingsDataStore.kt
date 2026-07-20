@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +28,7 @@ class SettingsDataStore(private val context: Context) {
         private val HISTORY_SHOW_TITLE_KEY = booleanPreferencesKey("history_show_title")
         private val WIFI_ONLY_DOWNLOAD_KEY = booleanPreferencesKey("wifi_only_download")
         private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
+        private val LAST_UPDATE_CHECK_TIME_KEY = longPreferencesKey("last_update_check_time")
 
         const val QUALITY_BEST = "best"
         const val QUALITY_720P = "720p"
@@ -84,6 +86,11 @@ class SettingsDataStore(private val context: Context) {
         } ?: THEME_SYSTEM
     }
 
+    /** 上次检查应用版本更新的时间戳（毫秒）。0 表示从未检查。 */
+    val lastUpdateCheckTime: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[LAST_UPDATE_CHECK_TIME_KEY] ?: 0L
+    }
+
     /** 更新历史记录 */
     suspend fun saveDownloadHistory(json: String) {
         context.dataStore.edit { prefs ->
@@ -138,6 +145,13 @@ class SettingsDataStore(private val context: Context) {
             prefs[THEME_MODE_KEY] = mode.takeIf {
                 it == THEME_SYSTEM || it == THEME_LIGHT || it == THEME_DARK
             } ?: THEME_SYSTEM
+        }
+    }
+
+    /** 更新上次检查应用版本更新的时间戳。 */
+    suspend fun setLastUpdateCheckTime(timestamp: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[LAST_UPDATE_CHECK_TIME_KEY] = timestamp
         }
     }
 }
