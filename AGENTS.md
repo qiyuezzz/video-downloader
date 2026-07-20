@@ -6,7 +6,7 @@
 
 ## 架构与运行时要点
 
-- 解析遵循「专用解析器优先，yt-dlp 兼容回退」策略，由 `ParseCoordinator` 编排：先按 `supports(url)` 顺序尝试 `BilibiliNativeParser`、`TwitterApiParser`、`InstagramAnonymousParser`，全部失败或返回空 `formats` 时回退到 `YtDlpParser`。新增站点应实现 `VideoParser` 接口并注册到 `ParseCoordinator`。
+- 解析遵循「专用解析器优先，yt-dlp 兼容回退」策略，由 `ParseCoordinator` 编排：先按 `supports(url)` 顺序尝试 `TwitterApiParser`、`BilibiliNativeParser`、`InstagramAnonymousParser`（各解析器 `supports()` 域互斥，顺序不影响正常链接结果），全部失败或返回空 `formats` 时回退到 `YtDlpParser`。新增站点应实现 `VideoParser` 接口并注册到 `ParseCoordinator`。
 - 下载由 WorkManager 承载：`VideoDownloadWorker` 是 `CoroutineWorker`，以 `foregroundServiceType=dataSync` 前台服务运行，支持断点续传与应用重启后恢复。下载状态变更应补充 `app/src/test/` 单元测试。
 - 存储使用 Android SAF / `DocumentFile`，由用户在系统目录选择器中授权保存目录，**不要**申请 `READ/WRITE_EXTERNAL_STORAGE` 类权限。`AndroidManifest.xml` 中 `usesCleartextTraffic=false`、`allowBackup=false`，新增网络请求前确认是否需要调整。
 - 网络请求复用 `util.NetworkClients.standard` 或 `noRedirect`，**不要**在各解析器中重复 `new OkHttpClient`；统一请求头放在 `NetworkConstants`（移动端/桌面端 UA、B 站 Referer 等）。

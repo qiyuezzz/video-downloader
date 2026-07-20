@@ -17,6 +17,21 @@
 - 支持中文和英文，首次启动时选择语言，也可在设置中随时切换。
 - 支持在设置页更新 yt-dlp 解析引擎。
 
+## 界面预览
+
+<table>
+  <tr>
+    <th>主页</th>
+    <th>视频</th>
+    <th>设置</th>
+  </tr>
+  <tr>
+    <td><img src="docs/home.png" alt="主页" width="240"/></td>
+    <td><img src="docs/videos.png" alt="视频" width="240"/></td>
+    <td><img src="docs/settings.png" alt="设置" width="240"/></td>
+  </tr>
+</table>
+
 ## 平台解析方式
 
 应用采用“专用解析器优先，yt-dlp 兼容回退”的策略：
