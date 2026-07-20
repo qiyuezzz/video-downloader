@@ -1,6 +1,7 @@
 package com.example.videodownload.ui.settings
 
 import android.app.Application
+import android.media.MediaMetadataRetriever
 import android.util.Log
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -71,8 +72,36 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         SettingsDataStore.THEME_SYSTEM,
     )
 
+    val wifiOnlyDownload = settingsDataStore.wifiOnlyDownload.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        true,
+    )
+
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState
+
+    private val _currentYtDlpVersion = MutableStateFlow<String?>(null)
+    val currentYtDlpVersion: StateFlow<String?> = _currentYtDlpVersion
+
+    init {
+        refreshCurrentYtDlpVersion()
+    }
+
+    /**
+     * 读取当前已安装的 yt-dlp 版本号（来自库 SharedPrefs 的 dlpVersion）。
+     * 未安装或读取失败时为 null。仅用于设置页展示。
+     */
+    private fun refreshCurrentYtDlpVersion() {
+        viewModelScope.launch {
+            val version = withContext(Dispatchers.IO) {
+                runCatching { YoutubeDL.getInstance().version(getApplication()) }
+                    .getOrNull()
+                    ?.takeIf { it.isNotBlank() }
+            }
+            _currentYtDlpVersion.value = version
+        }
+    }
 
     private val _historyRestoreState = MutableStateFlow<HistoryRestoreState>(HistoryRestoreState.Idle)
     val historyRestoreState: StateFlow<HistoryRestoreState> = _historyRestoreState
@@ -134,6 +163,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val uriString = uri.toString()
         if (!knownUris.add(uriString)) return null
         val name = name?.takeIf(String::isNotBlank) ?: return null
+        val durationMillis = readVideoDurationMillis(uri)
         return DownloadHistoryItem(
             id = UUID.randomUUID().toString(),
             title = name.substringBeforeLast('.').ifBlank { name },
@@ -144,8 +174,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             webpageUrl = "",
             timestamp = lastModified().takeIf { it > 0 } ?: System.currentTimeMillis(),
             platform = platform,
+            durationMillis = durationMillis,
         )
     }
+
+    /**
+     * 使用 MediaMetadataRetriever 读取本地视频时长（毫秒）。
+     * 在 [Dispatchers.IO] 协程内调用；读取失败或容器不支持时返回 null。
+     */
+    private fun readVideoDurationMillis(uri: android.net.Uri): Long? = runCatching {
+        MediaMetadataRetriever().use { retriever ->
+            retriever.setDataSource(getApplication(), uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?.takeIf { it > 0 }
+        }
+    }.getOrNull()
 
     private fun DocumentFile.isVideoFile(): Boolean {
         return isRecoverableVideoFile(name, type)
@@ -169,17 +213,25 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
         viewModelScope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
+                withContext(Dispatchers.IO) {
                     YtDlpEngine.ensureInitialized(getApplication())
                     YoutubeDL.getInstance().updateYoutubeDL(
                         getApplication(),
                         YoutubeDL.UpdateChannel.STABLE
                     )
                 }
-                Log.d("SettingsViewModel", "yt-dlp updated, status: $result")
-                _updateState.value = UpdateState.Success(
-                    getApplication<Application>().getString(R.string.settings_update_success, result)
-                )
+                // 更新成功后刷新当前版本号，让 UI 立即展示新版本
+                refreshCurrentYtDlpVersion()
+                val newVersion = _currentYtDlpVersion.value
+                _updateState.value = if (newVersion != null) {
+                    UpdateState.Success(
+                        getApplication<Application>().getString(R.string.settings_update_success_version, newVersion)
+                    )
+                } else {
+                    UpdateState.Success(
+                        getApplication<Application>().getString(R.string.settings_update_success)
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -200,6 +252,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
             settingsDataStore.setThemeMode(mode)
+        }
+    }
+
+    fun setWifiOnlyDownload(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setWifiOnlyDownload(enabled)
         }
     }
 

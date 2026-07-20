@@ -2,6 +2,7 @@ package com.example.videodownload.ui.home
 
 import com.example.videodownload.data.model.DownloadHistoryItem
 import com.example.videodownload.data.SettingsDataStore
+import com.example.videodownload.util.DurationFormatter
 import com.example.videodownload.util.VideoPlatform
 
 import androidx.compose.animation.*
@@ -50,6 +51,7 @@ fun DownloadHistoryScreen(
 ) {
     val history by viewModel.history.collectAsStateWithLifecycle()
     val layoutMode by viewModel.historyLayout.collectAsStateWithLifecycle()
+    val showTitle by viewModel.historyShowTitle.collectAsStateWithLifecycle()
     val platformCounts = remember(history) {
         history.groupingBy(::historyPlatform).eachCount()
     }
@@ -164,6 +166,36 @@ fun DownloadHistoryScreen(
                                 )
                             }
                         } else {
+                            // 列表模式下隐藏标题会让单条视频占满屏宽，体验差，故禁用
+                            val titleToggleEnabled = layoutMode != SettingsDataStore.HISTORY_LAYOUT_LIST
+                            IconButton(
+                                onClick = { viewModel.setHistoryShowTitle(!showTitle) },
+                                enabled = titleToggleEnabled,
+                            ) {
+                                Icon(
+                                    imageVector = if (showTitle) {
+                                        Icons.Outlined.Title
+                                    } else {
+                                        Icons.Outlined.HideSource
+                                    },
+                                    contentDescription = stringResource(
+                                        if (titleToggleEnabled) {
+                                            if (showTitle) R.string.history_hide_title
+                                            else R.string.history_show_title
+                                        } else {
+                                            R.string.history_title_toggle_disabled
+                                        }
+                                    ),
+                                    tint = if (!titleToggleEnabled) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                    } else if (showTitle) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
                             IconButton(onClick = {
                                 viewModel.setHistoryLayout(nextHistoryLayout(layoutMode))
                             }) {
@@ -288,6 +320,7 @@ fun DownloadHistoryScreen(
                                         compact = compact,
                                         isEditMode = isEditMode,
                                         isSelected = selectedItems.contains(item.id),
+                                        showTitle = showTitle,
                                         onClick = {
                                             if (isEditMode) {
                                                 toggleSelection(item.id)
@@ -336,6 +369,7 @@ private fun NovaHistoryGridCard(
     compact: Boolean,
     isEditMode: Boolean,
     isSelected: Boolean,
+    showTitle: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -352,7 +386,18 @@ private fun NovaHistoryGridCard(
             else MaterialTheme.colorScheme.outlineVariant,
         ),
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                // 显示标题时固定最小高度避免同行卡片参差；
+                // 隐藏标题时移除约束，缩略图按 16:9 紧凑排列，类似相册。
+                .then(
+                    if (showTitle) {
+                        Modifier.heightIn(min = if (compact) 150.dp else 188.dp)
+                    } else {
+                        Modifier
+                    }
+                ),
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -378,6 +423,23 @@ private fun NovaHistoryGridCard(
                             .size(if (compact) 14.dp else 18.dp),
                     )
                 }
+                item.durationMillis?.let { duration ->
+                    val text = DurationFormatter.format(duration) ?: return@let
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color.Black.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp),
+                    ) {
+                        Text(
+                            text = text,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                        )
+                    }
+                }
                 if (isEditMode) {
                     Checkbox(
                         checked = isSelected,
@@ -391,19 +453,23 @@ private fun NovaHistoryGridCard(
                     )
                 }
             }
-            Column(modifier = Modifier.padding(if (compact) 8.dp else 12.dp)) {
-                Text(
-                    text = item.title,
-                    style = if (compact) {
-                        MaterialTheme.typography.bodySmall
-                    } else {
-                        MaterialTheme.typography.titleSmall
-                    },
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (!compact) {
+            if (showTitle) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(if (compact) 8.dp else 12.dp),
+                ) {
+                    Text(
+                        text = item.title,
+                        style = if (compact) {
+                            MaterialTheme.typography.bodySmall
+                        } else {
+                            MaterialTheme.typography.titleSmall
+                        },
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Spacer(modifier = Modifier.height(5.dp))
                     Text(
                         text = formatDate(item.timestamp),
@@ -464,7 +530,7 @@ fun NovaHistoryCard(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            // 媒体预览
+            // 媒体预览：列表模式始终显示标题，缩略图保持固定尺寸
             Box(
                 modifier = Modifier
                     .size(width = 120.dp, height = 68.dp)
@@ -492,6 +558,23 @@ fun NovaHistoryCard(
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
+                }
+                item.durationMillis?.let { duration ->
+                    val text = DurationFormatter.format(duration) ?: return@let
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color.Black.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(3.dp),
+                    ) {
+                        Text(
+                            text = text,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                        )
+                    }
                 }
             }
 

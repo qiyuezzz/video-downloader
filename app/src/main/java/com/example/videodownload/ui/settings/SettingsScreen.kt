@@ -60,7 +60,9 @@ fun SettingsScreen(
     val saveLocationName by viewModel.saveLocationName.collectAsStateWithLifecycle()
     val preferredQuality by viewModel.preferredQuality.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val wifiOnlyDownload by viewModel.wifiOnlyDownload.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val currentYtDlpVersion by viewModel.currentYtDlpVersion.collectAsStateWithLifecycle()
     val historyRestoreState by viewModel.historyRestoreState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val selectedLanguage = AppLanguage.selectedLanguage(context) ?: AppLanguage.CHINESE
@@ -228,6 +230,19 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
+            // ---- 下载 ----
+            SettingsSectionHeader(title = stringResource(R.string.settings_download), icon = Icons.Outlined.Download)
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsToggleRow(
+                icon = Icons.Outlined.Wifi,
+                title = stringResource(R.string.settings_wifi_only),
+                subtitle = stringResource(R.string.settings_wifi_only_subtitle),
+                checked = wifiOnlyDownload,
+                onCheckedChange = viewModel::setWifiOnlyDownload,
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
             // ---- yt-dlp 引擎 ----
             SettingsSectionHeader(title = stringResource(R.string.settings_parser_engine), icon = Icons.Outlined.Build)
             Spacer(modifier = Modifier.height(8.dp))
@@ -247,6 +262,15 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         lineHeight = MaterialTheme.typography.bodySmall.lineHeight
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = currentYtDlpVersion
+                            ?.let { stringResource(R.string.settings_ytdlp_current_version, it) }
+                            ?: stringResource(R.string.settings_ytdlp_version_unknown),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -442,5 +466,64 @@ private fun SettingsSectionHeader(title: String, icon: androidx.compose.ui.graph
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+/**
+ * 设置页开关行：左侧图标 + 标题/副标题 + 右侧 Switch。
+ * 视觉风格与"保存位置"卡片保持一致。
+ */
+@Composable
+private fun SettingsToggleRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+            )
+        }
     }
 }
