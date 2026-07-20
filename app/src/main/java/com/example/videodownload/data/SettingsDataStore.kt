@@ -3,8 +3,10 @@ package com.example.videodownload.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +25,10 @@ class SettingsDataStore(private val context: Context) {
         private val DOWNLOAD_HISTORY_KEY = stringPreferencesKey("download_history")
         private val ACTIVE_DOWNLOADS_KEY = stringPreferencesKey("active_downloads")
         private val HISTORY_LAYOUT_KEY = intPreferencesKey("history_layout")
+        private val HISTORY_SHOW_TITLE_KEY = booleanPreferencesKey("history_show_title")
+        private val WIFI_ONLY_DOWNLOAD_KEY = booleanPreferencesKey("wifi_only_download")
         private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
+        private val LAST_UPDATE_CHECK_TIME_KEY = longPreferencesKey("last_update_check_time")
 
         const val QUALITY_BEST = "best"
         const val QUALITY_720P = "720p"
@@ -64,11 +69,26 @@ class SettingsDataStore(private val context: Context) {
             ?: HISTORY_LAYOUT_LIST
     }
 
+    /** 本地视频卡片是否显示标题，默认开启。 */
+    val historyShowTitle: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[HISTORY_SHOW_TITLE_KEY] ?: true
+    }
+
+    /** 是否仅在 WiFi 环境下下载，默认开启。开启后非 WiFi 下载会提示确认。 */
+    val wifiOnlyDownload: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[WIFI_ONLY_DOWNLOAD_KEY] ?: true
+    }
+
     /** 应用外观：跟随系统、浅色或深色。 */
     val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[THEME_MODE_KEY]?.takeIf {
             it == THEME_SYSTEM || it == THEME_LIGHT || it == THEME_DARK
         } ?: THEME_SYSTEM
+    }
+
+    /** 上次检查应用版本更新的时间戳（毫秒）。0 表示从未检查。 */
+    val lastUpdateCheckTime: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[LAST_UPDATE_CHECK_TIME_KEY] ?: 0L
     }
 
     /** 更新历史记录 */
@@ -108,11 +128,30 @@ class SettingsDataStore(private val context: Context) {
         }
     }
 
+    suspend fun setHistoryShowTitle(show: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[HISTORY_SHOW_TITLE_KEY] = show
+        }
+    }
+
+    suspend fun setWifiOnlyDownload(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[WIFI_ONLY_DOWNLOAD_KEY] = enabled
+        }
+    }
+
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { prefs ->
             prefs[THEME_MODE_KEY] = mode.takeIf {
                 it == THEME_SYSTEM || it == THEME_LIGHT || it == THEME_DARK
             } ?: THEME_SYSTEM
+        }
+    }
+
+    /** 更新上次检查应用版本更新的时间戳。 */
+    suspend fun setLastUpdateCheckTime(timestamp: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[LAST_UPDATE_CHECK_TIME_KEY] = timestamp
         }
     }
 }

@@ -31,6 +31,7 @@ import com.example.videodownload.ui.home.DownloadTasksScreen
 import com.example.videodownload.ui.home.HomeScreen
 import com.example.videodownload.ui.home.HomeViewModel
 import com.example.videodownload.ui.home.VideoPlayerScreen
+import com.example.videodownload.ui.settings.AppUpdateViewModel
 import com.example.videodownload.ui.settings.SettingsScreen
 import com.example.videodownload.R
 
@@ -50,6 +51,7 @@ private data class PlayerRequest(val uri: String, val title: String)
 @Composable
 fun AppNavigation() {
     val homeViewModel: HomeViewModel = viewModel()
+    val appUpdateViewModel: AppUpdateViewModel = viewModel()
     val bottomNavItems = listOf(Screen.Home, Screen.Downloads, Screen.Settings)
     var selectedRoute by rememberSaveable { mutableStateOf(Screen.Home.route) }
     var playerRequest by remember { mutableStateOf<PlayerRequest?>(null) }
@@ -147,7 +149,7 @@ fun AppNavigation() {
                         viewModel = homeViewModel,
                         onPlayVideo = { uri, title -> playerRequest = PlayerRequest(uri, title) },
                     )
-                    Screen.Settings.route -> SettingsScreen()
+                    Screen.Settings.route -> SettingsScreen(appUpdateViewModel = appUpdateViewModel)
                     else -> HomeScreen(
                         viewModel = homeViewModel,
                         onOpenDownloads = { showDownloadTasks = true },

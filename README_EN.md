@@ -139,3 +139,7 @@ Do not commit signing files, passwords, cookies, downloaded user content, or rea
 - Some servers do not support HTTP Range requests, so interrupted downloads may not resume from their previous progress.
 - The current release configuration targets 64-bit ARM Android devices only.
 
+## License
+
+This project is open-sourced under the [Apache License 2.0](LICENSE). You are free to use, modify, and distribute it, provided the copyright and license notices are retained. Third-party dependencies (Jetpack Compose, OkHttp, Media3, Coil, yt-dlp Android, etc.) remain under their respective licenses.
+

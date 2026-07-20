@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,14 +53,19 @@ private val LANGUAGE_OPTIONS = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    appUpdateViewModel: AppUpdateViewModel,
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val saveLocation by viewModel.saveLocation.collectAsStateWithLifecycle()
     val saveLocationName by viewModel.saveLocationName.collectAsStateWithLifecycle()
     val preferredQuality by viewModel.preferredQuality.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val wifiOnlyDownload by viewModel.wifiOnlyDownload.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val currentYtDlpVersion by viewModel.currentYtDlpVersion.collectAsStateWithLifecycle()
     val historyRestoreState by viewModel.historyRestoreState.collectAsStateWithLifecycle()
+    val appUpdateState by appUpdateViewModel.appUpdateState.collectAsStateWithLifecycle()
+    val appCurrentVersion by appUpdateViewModel.currentVersion.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val selectedLanguage = AppLanguage.selectedLanguage(context) ?: AppLanguage.CHINESE
 
@@ -228,6 +232,19 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
+            // ---- 下载 ----
+            SettingsSectionHeader(title = stringResource(R.string.settings_download), icon = Icons.Outlined.Download)
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsToggleRow(
+                icon = Icons.Outlined.Wifi,
+                title = stringResource(R.string.settings_wifi_only),
+                subtitle = stringResource(R.string.settings_wifi_only_subtitle),
+                checked = wifiOnlyDownload,
+                onCheckedChange = viewModel::setWifiOnlyDownload,
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
             // ---- yt-dlp 引擎 ----
             SettingsSectionHeader(title = stringResource(R.string.settings_parser_engine), icon = Icons.Outlined.Build)
             Spacer(modifier = Modifier.height(8.dp))
@@ -237,134 +254,258 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_parser_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    when (val state = updateState) {
-                        is UpdateState.Idle -> {
-                            Button(
-                                onClick = { viewModel.updateYoutubeDl() },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Outlined.Build,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
                                 )
-                            ) {
-                                Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.settings_check_update), fontWeight = FontWeight.SemiBold)
                             }
                         }
-                        is UpdateState.Updating -> {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        stringResource(R.string.settings_updating),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_parser_engine),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val (subtitle, subtitleColor) = when (val state = updateState) {
+                                is UpdateState.Updating ->
+                                    stringResource(R.string.settings_updating) to MaterialTheme.colorScheme.primary
+                                is UpdateState.Success ->
+                                    state.version to MaterialTheme.colorScheme.secondary
+                                is UpdateState.Error ->
+                                    state.message to MaterialTheme.colorScheme.error
+                                else ->
+                                    (currentYtDlpVersion
+                                        ?.let { stringResource(R.string.settings_ytdlp_current_version, it) }
+                                        ?: stringResource(R.string.settings_ytdlp_version_unknown)) to
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = subtitleColor,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        when (val state = updateState) {
+                            is UpdateState.Updating -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TextButton(onClick = {}, enabled = false) {
+                                    Text(stringResource(R.string.settings_updating))
+                                }
+                            }
+                            is UpdateState.Success -> {
+                                TextButton(onClick = { viewModel.updateYoutubeDl() }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.settings_update_again))
+                                }
+                            }
+                            is UpdateState.Error -> {
+                                TextButton(onClick = { viewModel.updateYoutubeDl() }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.settings_retry_update))
+                                }
+                            }
+                            else -> {
+                                TextButton(onClick = { viewModel.updateYoutubeDl() }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.settings_check_update))
                                 }
                             }
                         }
-                        is UpdateState.Success -> {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // ---- 应用更新 ----
+            SettingsSectionHeader(title = stringResource(R.string.settings_app_update), icon = Icons.Outlined.SystemUpdate)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Outlined.SystemUpdate,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_app_update),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val (subtitle, subtitleColor) = when (val state = appUpdateState) {
+                                is AppUpdateState.Checking ->
+                                    stringResource(R.string.settings_app_update_checking) to MaterialTheme.colorScheme.primary
+                                is AppUpdateState.UpToDate ->
+                                    stringResource(R.string.settings_app_update_uptodate) to MaterialTheme.colorScheme.secondary
+                                is AppUpdateState.UpdateAvailable ->
+                                    stringResource(R.string.settings_app_update_available, state.version) to MaterialTheme.colorScheme.primary
+                                is AppUpdateState.Downloading ->
+                                    stringResource(R.string.settings_app_update_downloading, state.progress) to MaterialTheme.colorScheme.primary
+                                is AppUpdateState.ReadyToInstall ->
+                                    stringResource(R.string.settings_app_update_ready) to MaterialTheme.colorScheme.secondary
+                                is AppUpdateState.Error ->
+                                    state.message to MaterialTheme.colorScheme.error
+                                else ->
+                                    (appCurrentVersion
+                                        ?.let { stringResource(R.string.settings_app_update_current_version, it) }
+                                        ?: stringResource(R.string.settings_app_update_version_unknown)) to
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = subtitleColor,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        when (val state = appUpdateState) {
+                            is AppUpdateState.Checking -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TextButton(onClick = {}, enabled = false) {
+                                    Text(stringResource(R.string.settings_app_update_checking))
+                                }
+                            }
+                            is AppUpdateState.UpToDate -> {
+                                TextButton(onClick = { appUpdateViewModel.checkForUpdates(force = true) }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.settings_app_update_check_again))
+                                }
+                            }
+                            is AppUpdateState.UpdateAvailable -> {
+                                Button(
+                                    onClick = { appUpdateViewModel.downloadUpdate() },
+                                    enabled = state.apkUrl.isNotBlank()
                                 ) {
-                                    Icon(
-                                        Icons.Filled.CheckCircle,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.secondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        state.version,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        fontWeight = FontWeight.SemiBold
+                                        if (state.apkUrl.isBlank()) stringResource(R.string.settings_app_update_no_apk)
+                                        else stringResource(R.string.settings_app_update_download)
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedButton(
-                                onClick = { viewModel.updateYoutubeDl() },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.settings_update_again))
+                            is AppUpdateState.Downloading -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            is AppUpdateState.ReadyToInstall -> {
+                                Button(onClick = { appUpdateViewModel.installUpdate() }) {
+                                    Icon(Icons.Outlined.InstallMobile, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.settings_app_update_install))
+                                }
+                            }
+                            is AppUpdateState.Error -> {
+                                TextButton(onClick = { appUpdateViewModel.checkForUpdates(force = true) }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.settings_app_update_retry))
+                                }
+                            }
+                            else -> {
+                                TextButton(onClick = { appUpdateViewModel.checkForUpdates(force = true) }) {
+                                    Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(stringResource(R.string.settings_app_update_check))
+                                }
                             }
                         }
-                        is UpdateState.Error -> {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                    }
+
+                    // 复杂态在主行下方展开详细内容
+                    when (val state = appUpdateState) {
+                        is AppUpdateState.UpdateAvailable -> {
+                            if (state.releaseNotes.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = stringResource(R.string.settings_update_failed),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = state.message,
+                                        text = state.releaseNotes.take(MAX_RELEASE_NOTES_LENGTH),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(12.dp),
+                                        maxLines = 4,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = { viewModel.updateYoutubeDl() },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(stringResource(R.string.settings_retry_update), fontWeight = FontWeight.SemiBold)
+                            if (state.apkUrl.isBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = { openUrl(context, state.htmlUrl) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Outlined.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(stringResource(R.string.settings_app_update_view_release))
+                                }
                             }
                         }
+                        is AppUpdateState.Downloading -> {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LinearProgressIndicator(
+                                progress = { state.progress / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                        }
+                        else -> {}
                     }
                 }
             }
@@ -400,8 +541,10 @@ private fun CompactOptionSelector(
                         // 选中态沿用主题 primary 系，避免默认 secondary 带来的青绿色与主题不统一
                         activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
                         activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        // 外层 Surface 已有 outlineVariant 边框，选中项不再单独描边，避免突兀
+                        // 所有选项均不单独描边，分组边框仅由外层 Surface 提供，避免选中色覆盖边框造成断裂感
                         activeBorderColor = Color.Transparent,
+                        inactiveContainerColor = Color.Transparent,
+                        inactiveBorderColor = Color.Transparent,
                     ),
                     modifier = Modifier.weight(1f),
                     icon = {},
@@ -423,6 +566,20 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+/** 用系统浏览器打开 URL，失败时静默忽略（无可用浏览器时不应崩溃）。 */
+private fun openUrl(context: Context, url: String) {
+    if (url.isBlank()) return
+    runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+}
+
+/** 发布说明展示长度上限，避免过长内容撑爆卡片。 */
+private const val MAX_RELEASE_NOTES_LENGTH = 280
+
 @Composable
 private fun SettingsSectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(
@@ -442,5 +599,64 @@ private fun SettingsSectionHeader(title: String, icon: androidx.compose.ui.graph
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+/**
+ * 设置页开关行：左侧图标 + 标题/副标题 + 右侧 Switch。
+ * 视觉风格与"保存位置"卡片保持一致。
+ */
+@Composable
+private fun SettingsToggleRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+            )
+        }
     }
 }

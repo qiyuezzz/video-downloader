@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -84,6 +85,45 @@ fun DownloadTasksScreen(
         }
     }
     BackHandler(enabled = selectionMode) { selectedIds = emptySet() }
+
+    // 续传相关的 WiFi 确认弹窗（新下载确认由 HomeScreen 处理）
+    var wifiResumeConfirmEvent by remember { mutableStateOf<HomeEvent.ShowWifiResumeConfirm?>(null) }
+    var wifiResumeAllConfirm by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        viewModel.uiEvent.collect { event ->
+            when (event) {
+                is HomeEvent.ShowWifiResumeConfirm -> wifiResumeConfirmEvent = event
+                HomeEvent.ShowWifiResumeAllConfirm -> wifiResumeAllConfirm = true
+                else -> Unit
+            }
+        }
+    }
+
+    if (wifiResumeConfirmEvent != null) {
+        NovaDeleteDialog(
+            title = stringResource(R.string.wifi_confirm_title),
+            content = stringResource(R.string.wifi_confirm_resume_message),
+            onDismiss = { wifiResumeConfirmEvent = null },
+            onConfirm = {
+                wifiResumeConfirmEvent?.let { event ->
+                    viewModel.confirmResumeOnWifi(event.taskId)
+                }
+                wifiResumeConfirmEvent = null
+            }
+        )
+    }
+
+    if (wifiResumeAllConfirm) {
+        NovaDeleteDialog(
+            title = stringResource(R.string.wifi_confirm_title),
+            content = stringResource(R.string.wifi_confirm_resume_all_message),
+            onDismiss = { wifiResumeAllConfirm = false },
+            onConfirm = {
+                viewModel.confirmResumeAllOnWifi()
+                wifiResumeAllConfirm = false
+            }
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -338,6 +378,17 @@ private fun DownloadDetailsCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                task.durationMillis?.let { duration ->
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        stringResource(
+                            R.string.tasks_video_duration,
+                            formatVideoDuration(duration),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
         }
@@ -386,3 +437,7 @@ private fun formatElapsed(startedAtMillis: Long, finishedAtMillis: Long, now: Lo
         String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 }
+
+/** 视频时长格式化，统一委托给 [DurationFormatter]；无法识别时返回 "--"。 */
+private fun formatVideoDuration(millis: Long?): String =
+    com.example.videodownload.util.DurationFormatter.format(millis) ?: "--"

@@ -104,7 +104,11 @@ class YtDlpParser(
                 title = streamInfo.title ?: "Unknown Video",
                 thumbnailUrl = streamInfo.thumbnail,
                 formats = distinctFormats,
-                webpageUrl = url
+                webpageUrl = url,
+                durationMillis = streamInfo.duration
+                    ?.takeIf { it > 0 }
+                    ?.toLong()
+                    ?.times(1000L),
             )
         } catch (e: Exception) {
             Log.w("YtDlpParser", "yt-dlp 解析失败", e)

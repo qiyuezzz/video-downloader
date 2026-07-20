@@ -57,6 +57,7 @@ fun HomeScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var showBottomSheet by remember { mutableStateOf(false) }
     var duplicateConfirmEvent by remember { mutableStateOf<HomeEvent.ShowDuplicateConfirm?>(null) }
+    var wifiConfirmEvent by remember { mutableStateOf<HomeEvent.ShowWifiConfirm?>(null) }
 
     // Lifecycle listener for clipboard
     DisposableEffect(lifecycleOwner) {
@@ -80,6 +81,11 @@ fun HomeScreen(
                 is HomeEvent.ShowDuplicateConfirm -> {
                     duplicateConfirmEvent = event
                 }
+                is HomeEvent.ShowWifiConfirm -> {
+                    wifiConfirmEvent = event
+                }
+                // 续传相关的 WiFi 确认由 DownloadTasksScreen 处理
+                is HomeEvent.ShowWifiResumeConfirm, HomeEvent.ShowWifiResumeAllConfirm -> Unit
             }
         }
     }
@@ -94,6 +100,21 @@ fun HomeScreen(
                     viewModel.downloadVideos(event.videoInfo, event.formats, force = true)
                 }
                 duplicateConfirmEvent = null
+                showBottomSheet = false
+            }
+        )
+    }
+
+    if (wifiConfirmEvent != null) {
+        NovaDeleteDialog(
+            title = stringResource(R.string.wifi_confirm_title),
+            content = stringResource(R.string.wifi_confirm_message),
+            onDismiss = { wifiConfirmEvent = null },
+            onConfirm = {
+                wifiConfirmEvent?.let { event ->
+                    viewModel.confirmDownloadOnWifi(event.videoInfo, event.formats)
+                }
+                wifiConfirmEvent = null
                 showBottomSheet = false
             }
         )
@@ -187,7 +208,7 @@ fun HomeScreen(
                 ) { state ->
                     when (state) {
                         is ParseState.Idle -> {
-                            NovaIdleHint()
+                            // 空闲状态不展示介绍内容，聚焦输入与解析
                         }
                         is ParseState.Loading -> {
                             NovaLoadingIndicator()
@@ -286,86 +307,6 @@ private fun NovaPasteSection(
                 Spacer(modifier = Modifier.width(7.dp))
                 Text(stringResource(R.string.home_start_parse), fontWeight = FontWeight.Bold)
             }
-        }
-    }
-}
-
-// ============================================================
-// 空闲提示
-// ============================================================
-
-@Composable
-private fun NovaIdleHint() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 6.dp),
-    ) {
-        Text(
-            stringResource(R.string.home_idle_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            stringResource(R.string.home_idle_description),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(14.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            HomeFeatureCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Outlined.Bolt,
-                title = stringResource(R.string.home_quick_parse),
-                description = stringResource(R.string.home_auto_match_site),
-                color = MaterialTheme.colorScheme.primary,
-            )
-            HomeFeatureCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Outlined.HighQuality,
-                title = stringResource(R.string.home_choose_quality),
-                description = stringResource(R.string.home_preview_before_download),
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HomeFeatureCard(
-    modifier: Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    color: Color,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(color.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-            }
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

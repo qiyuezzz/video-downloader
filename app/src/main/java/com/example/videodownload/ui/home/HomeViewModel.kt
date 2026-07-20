@@ -28,6 +28,7 @@ import com.example.videodownload.parser.InstagramAnonymousParser
 import com.example.videodownload.parser.ParseCoordinator
 import com.example.videodownload.parser.TwitterApiParser
 import com.example.videodownload.parser.YtDlpParser
+import com.example.videodownload.util.NetworkMonitor
 import com.example.videodownload.util.UrlNormalizer
 import com.example.videodownload.util.VideoPlatform
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +74,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope,
         SharingStarted.Eagerly,
         SettingsDataStore.HISTORY_LAYOUT_LIST,
+    )
+
+    val historyShowTitle: StateFlow<Boolean> = settingsDataStore.historyShowTitle.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
+    val wifiOnlyDownload: StateFlow<Boolean> = settingsDataStore.wifiOnlyDownload.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
     )
 
     private val _clipboardUrl = MutableStateFlow<String?>(null)
@@ -141,6 +154,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             webpageUrl = task.webpageUrl,
             timestamp = System.currentTimeMillis(),
             platform = VideoPlatform.folderName(task.webpageUrl),
+            durationMillis = task.durationMillis,
         )
         _history.update { current -> listOf(newItem) + current }
         viewModelScope.launch { saveHistory() }
@@ -270,7 +284,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
         }
+        // force=true 表示用户已通过重复确认或 WiFi 确认，直接下载；否则先做 WiFi 校验
+        if (force) {
+            executeDownload(videoInfo, formats)
+        } else {
+            viewModelScope.launch {
+                if (shouldConfirmForWifi()) {
+                    _uiEvent.emit(HomeEvent.ShowWifiConfirm(videoInfo, formats))
+                } else {
+                    executeDownload(videoInfo, formats)
+                }
+            }
+        }
+    }
+
+    /** 用户在非 WiFi 确认弹窗中点击"继续下载"后调用。 */
+    fun confirmDownloadOnWifi(videoInfo: VideoInfo, formats: List<VideoFormat>) {
         executeDownload(videoInfo, formats)
+    }
+
+    /**
+     * 是否需要在当前网络环境下提示 WiFi 确认。
+     * 仅当用户开启"仅 WiFi 下载"且当前非 WiFi 时返回 true。
+     */
+    private suspend fun shouldConfirmForWifi(): Boolean {
+        if (!settingsDataStore.wifiOnlyDownload.first()) return false
+        return withContext(Dispatchers.IO) {
+            !NetworkMonitor.isWifiConnected(getApplication())
+        }
     }
 
     private fun executeDownload(videoInfo: VideoInfo, formats: List<VideoFormat>) {
@@ -298,6 +339,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     directoryUri = saveUri,
                     totalBytes = format.filesize ?: 0,
                     startedAtMillis = System.currentTimeMillis(),
+                    durationMillis = videoInfo.durationMillis,
                 )
 
                 _downloadTasks.update { current -> listOf(newTask) + current }
@@ -310,10 +352,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * 恢复所有中断/失败的下载
      */
     fun resumeAllDownloads() {
+        viewModelScope.launch {
+            if (shouldConfirmForWifi()) {
+                _uiEvent.emit(HomeEvent.ShowWifiResumeAllConfirm)
+            } else {
+                resumeAllDownloadsInternal()
+            }
+        }
+    }
+
+    /** 用户在非 WiFi 确认弹窗中点击"全部继续"后调用。 */
+    fun confirmResumeAllOnWifi() {
+        resumeAllDownloadsInternal()
+    }
+
+    private fun resumeAllDownloadsInternal() {
         val tasksToResume = _downloadTasks.value.filter {
             it.state is DownloadState.Interrupted || it.state is DownloadState.Error
         }
-        tasksToResume.forEach { resumeDownload(it.id) }
+        tasksToResume.forEach { resumeDownloadInternal(it.id) }
     }
 
     /** 暂停所有排队中或正在进行的下载。 */
@@ -328,6 +385,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * 恢复中断的下载
      */
     fun resumeDownload(taskId: String) {
+        viewModelScope.launch {
+            if (shouldConfirmForWifi()) {
+                _uiEvent.emit(HomeEvent.ShowWifiResumeConfirm(taskId))
+            } else {
+                resumeDownloadInternal(taskId)
+            }
+        }
+    }
+
+    /** 用户在非 WiFi 确认弹窗中点击"继续下载"后调用。 */
+    fun confirmResumeOnWifi(taskId: String) {
+        resumeDownloadInternal(taskId)
+    }
+
+    private fun resumeDownloadInternal(taskId: String) {
         val task = _downloadTasks.value.find { it.id == taskId } ?: return
         if (task.state !is DownloadState.Interrupted && task.state !is DownloadState.Error) return
 
@@ -404,6 +476,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun setHistoryLayout(layout: Int) {
         viewModelScope.launch {
             settingsDataStore.setHistoryLayout(layout)
+        }
+    }
+
+    fun setHistoryShowTitle(show: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setHistoryShowTitle(show)
         }
     }
 
