@@ -17,6 +17,21 @@ An Android application for parsing, downloading, and managing videos, built with
 - Choose Chinese or English on first launch and switch languages later in Settings.
 - Update the yt-dlp parsing engine from the Settings screen.
 
+## Screenshots
+
+<table>
+  <tr>
+    <th>Home</th>
+    <th>Videos</th>
+    <th>Settings</th>
+  </tr>
+  <tr>
+    <td><img src="docs/home.png" alt="Home" width="240"/></td>
+    <td><img src="docs/videos.png" alt="Videos" width="240"/></td>
+    <td><img src="docs/settings.png" alt="Settings" width="240"/></td>
+  </tr>
+</table>
+
 ## Parsing Strategy
 
 The app uses dedicated parsers first and falls back to yt-dlp for compatibility:
