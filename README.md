@@ -138,3 +138,7 @@ RELEASE_KEY_PASSWORD=your_key_password
 - 平台网页或接口调整后，专用解析器可能暂时失效，可尝试更新 yt-dlp。
 - 部分服务器不支持 HTTP Range，请求中断后可能无法从原进度续传。
 - 当前发布配置仅面向 64 位 ARM Android 设备。
+
+## 开源协议
+
+本项目基于 [Apache License 2.0](LICENSE) 开源，允许在保留版权与协议声明的前提下自由使用、修改和分发。应用所依赖的第三方库（Jetpack Compose、OkHttp、Media3、Coil、yt-dlp Android 等）各自遵循其原始协议。
